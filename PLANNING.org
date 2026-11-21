@@ -1,0 +1,164 @@
+#+title: Magit Repolist Fork Plan
+#+date: 2026-11-21
+#+filetags: :emacs:magit:repolist:
+
+* Status
+
+Gregory runs MELPA Magit on the EXWM host, with workarounds in
+=~/emacs-gregoryg/README.org= (section "Magit").  This clone exists to fix
+=magit-list-repositories= for daily use and to keep each fix in a shape that
+could go upstream.
+
+The first topic, =repolist/local-variable-p=, was committed and accepted on
+2026-11-21.  The other topics are planned, and the EXWM host does not run
+the fork yet.
+
+Executable status lives in [[file:TASKS.org][TASKS.org]].  Setup and branch
+mechanics live in [[file:README-repolist-dev.org][README-repolist-dev.org]].
+
+* Goal and boundary
+
+Make the repository list a dependable daily dashboard:
+
+- fetching never blocks Emacs, which is fatal under EXWM;
+- a fetch that fails, especially for a missing SSH key, is visible in the list;
+- the global list and per-directory lists are selected correctly; and
+- marking and bulk commands work when the list uses =tabulated-list-groups=.
+
+Changes useful to every Magit user are shaped as upstream topics.  Personal
+taste, such as the filter-group definitions, flag glyphs, and key choices,
+stays in Gregory's config.
+
+* Environment
+
+- *perihelion* :: Development host for this clone and for agent sessions.
+  Emacs 32.0.50, git 2.47.3.  Also a TRAMP target in Gregory's repository
+  list (=/ssh:perihelion:...=).
+- *EXWM host* :: Gregory's daily Emacs.  Loads Magit from MELPA; acceptance
+  testing happens here, because the hang and the UI problems only show there.
+- *Remotes* :: =origin= is the fork =gregoryg/magit=; =upstream= is
+  =magit/magit=.
+
+* 2026-11-21 — Upstream-shaped topics, private use first
+
+Work proceeds as if every general fix were going upstream: one logical change
+per topic branch, based on =upstream/main=, in Magit's commit style.  Gregory
+runs the combination of all topics now, through an integration branch.
+
+Claude writes the code.  Magit's =.github/CONTRIBUTING.md= rejects
+LLM-generated code, so upstream engagement starts with GitHub Discussions
+(features) and issues (bugs, once trackers reopen in early 2027).  Any pull
+request uses code Gregory rewrites himself.
+
+Why: the need is immediate, Gregory wants to learn the topic-branch workflow,
+and the shape keeps an upstream path open without blocking daily use on it.
+
+* 2026-11-21 — Branch layout
+
+- =main= mirrors =upstream/main= and only fast-forwards.
+- Topic branches are named =repolist/<slug>= and start from =upstream/main=.
+  A topic that depends on another is stacked on it and moved with
+  =git rebase --update-refs=.
+- =gjg= is the integration branch.  It is rebuilt from =upstream/main= by
+  merging the topics in a fixed order, never edited directly, and
+  force-pushed to =origin=.  It is the only branch the EXWM host runs.
+- =git rerere= records conflict resolutions, because every topic touches
+  =lisp/magit-repos.el=.
+- No worktree is needed: no Emacs loads code from perihelion.  Revisit if
+  topics need to be checked out side by side.
+
+Upstream is quiet until early 2027, so rebasing onto it should be rare.
+
+* Problem analysis (2026-11-21)
+
+Findings from reading =lisp/magit-repos.el= at upstream =7a05d472= and Emacs
+32 =tabulated-list.el= and =outline.el=.
+
+** Per-directory list opens on every call
+
+=magit-repolist-setup= decides whether to show a per-directory list with
+=buffer-local-boundp=, which is true for every bound variable, including a
+globally customized =magit-repository-directories=.  Verified in batch Emacs:
+=buffer-local-boundp= returns =t= where =local-variable-p= returns =nil=.  The
+regression came with =3680327c= and =40310490= (per-directory lists, 2026-10).
+Fix: test =local-variable-p=.  Workaround: advice
+=gjg/magit-repolist-force-global=, which also discards the prefix argument.
+
+A smaller flaw in the same feature: the per-directory buffer is named after
+the invoking buffer's directory rather than the list's directory, so the same
+list can open in several buffers.  Kept as a separate topic.
+
+** Group header lines are collected as repositories
+
+=magit-repolist--marked-repos= treats any line not starting with a space as
+marked, and group headings start with =*=, the mark character.  With =all=,
+=magit-repolist--mapc= collects every line.  Both yield =nil= ids, and
+=expand-file-name= then signals.  Fix: skip lines without a
+=tabulated-list-get-id=.  This is harmless on Emacs 28, where groups do not
+exist.  Workaround: =gjg/magit-repolist--target-repos=.
+
+** Group heading highlight is lost
+
+Tabulated-list buffers have no font-lock keywords, so
+=outline-minor-mode-highlight= falls back to one-shot overlays.  The mode
+hook runs before entries are printed, so nothing is highlighted until a revert
+(=g=), which runs =outline-revert-buffer-rehighlight=.  The first mark calls
+=magit-repolist--ensure-padding=, which reprints the buffer and drops the
+overlays.  Marked rows also begin with =*=, so the default =outline-regexp=
+makes them level-1 headings, which breaks folding and heading motion.  This
+only matters with grouping, so it is fixed in config unless grouping goes
+upstream.
+
+** No command to unmark all
+
+Upstream has =m= and =u= only.  Emacs provides
+=tabulated-list-clear-all-tags=; its availability in Emacs 28.1 (Magit's
+minimum) is still to be checked.
+
+** Fetch blocks Emacs and hides failures
+
+=magit-repolist-fetch= runs =magit-run-git= per repository, which calls
+=process-file= synchronously.  Under EXWM, Emacs is the window manager, so
+the whole desktop freezes.  A synchronous child has no pty, so when the SSH
+key is not in the agent, ssh's passphrase prompt goes nowhere and the fetch
+hangs until =C-g=.  Errors are invisible: =magit-process-finish= prints
+=Git error: …=, which =magit-repolist--mapc= immediately overwrites with
+=…done= and the next progress message.  Asynchronous Magit processes use a
+pty and recognize passphrase prompts, which is why fetching from a status
+buffer works.
+
+Refreshing the list is synchronous as well: every column runs at least one git
+command per repository, and TRAMP repositories pay a round trip for each.
+
+* Fetch design (open)
+
+Requirements:
+
+- non-blocking, one repository at a time or a small fixed concurrency;
+- fail fast when credentials are missing, with no prompting during a bulk
+  fetch (decided 2026-11-21: Gregory prefers fail-fast over prompting);
+- per-repository outcome visible in the list, plus a summary message;
+- each row refreshed as its fetch completes;
+- a way to cancel, and to re-run on failed or marked repositories; and
+- correct behavior for TRAMP repositories.
+
+Candidate approaches:
+
+- *A: environment* — bind =GIT_SSH_COMMAND= to =ssh -o BatchMode=yes= and
+  =GIT_TERMINAL_PROMPT=0=.  Simple, but overrides a user's
+  =core.sshCommand=, and propagation through TRAMP needs checking.
+- *B: detect and abort* — run with =magit-start-git= (pty).  When
+  =magit-process-password-prompt-regexps= matches during a bulk fetch, kill
+  the process and record "needs credentials".  Respects SSH configuration,
+  reuses Magit's own prompt detection, and covers HTTPS prompts too.
+
+Leaning towards B; verify Magit's prompt hook point and TRAMP behavior before
+building.  Also open: whether results appear as a dedicated column, a flag,
+or a face on the row.
+
+* Grouping upstream (open)
+
+Filter groups like ibuffer's would help anyone with many repositories.
+=tabulated-list-groups= needs Emacs 30, while Magit supports 28.1, so an
+upstream version would have to degrade gracefully.  Decide after the fixes
+above; a good subject for a GitHub Discussion.

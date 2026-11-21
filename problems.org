@@ -1,0 +1,9 @@
+* Quejitas [/]
+** Fetch loops when ssh-key is required but not present in ssh-agent
+   many fetch failures are not reported to the user - endless loop;  there will be magit-process buffers created, asking for the SSH key - magit-status buffers report those to the user, but not magit-repolist buffer
+** Groups highlight issue
+   tabulated-list-groups headings are not highlighted until after a refresh; marking a line unhighlights existing highlights, requiring another refresh;
+** Missing standard "unmark" key
+   there is no "U" for removing existing marks
+** fetch absolutely needs to become async
+   I run EXWM and the hang while fetching blocks everything

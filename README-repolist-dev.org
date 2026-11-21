@@ -1,0 +1,205 @@
+#+title: Magit Repolist Fork: Developer Guide
+#+date: 2026-11-21
+#+filetags: :emacs:magit:repolist:
+
+How to work on, test, and run Gregory's fork of Magit's repository list.
+Direction and decisions are in [[file:PLANNING.org][PLANNING.org]]; status is in
+[[file:TASKS.org][TASKS.org]].  Magit's own [[file:README.org][README.org]] is untouched.
+
+* Where these notes live
+
+=PLANNING.org=, =TASKS.org=, and this file are untracked at the repository
+root, so they stay put across branch switches and never enter a topic branch.
+They are listed in =.git/info/exclude=, next to the existing =AGENTS.md=
+entries, so that =git status= stays quiet and =git add -A= cannot sweep them
+into a commit.  They have no history.
+
+** Moving them to a =notes= branch
+
+To give the notes history without touching any topic branch, keep them on an
+orphan =notes= branch checked out as an excluded =.notes/= worktree.  Save
+the files and kill their Emacs buffers first, then run from the repository
+root:
+
+#+begin_src bash
+git worktree add --orphan -b notes .notes
+echo '.notes/' >> .git/info/exclude
+mv PLANNING.org TASKS.org README-repolist-dev.org problems.org .notes/
+sed -i -E '/^(PLANNING|TASKS|README-repolist-dev|problems)\.org$/d' \
+  .git/info/exclude
+git -C .notes add .
+git -C .notes commit -m 'Add repository list fork notes'
+#+end_src
+
+All worktrees share =.git/info/exclude=, so the four file names must leave
+it, or =git add= in =.notes/= silently skips them.  =notes= can stay a local
+branch; pushing it to =origin= publishes it with the fork.
+
+Tested 2026-11-21 in a throwaway repository with git 2.47.3: the main
+worktree stays clean, and =.notes/= shows only as ignored.
+
+* Branches
+
+| Branch            | Based on                           | Purpose                            |
+|-------------------+------------------------------------+------------------------------------|
+| =main=            | =upstream/main=                    | Mirror; fast-forward only          |
+| =repolist/<slug>= | =upstream/main=                    | One logical fix, upstream-shaped   |
+| =gjg=             | =upstream/main=, rebuilt by script | All topics merged; what Emacs runs |
+
+Current topics, in merge order:
+
+1. =repolist/local-variable-p=
+2. =repolist/group-headers=
+3. =repolist/async-fetch= (stacked on =repolist/group-headers=)
+4. =repolist/unmark-all=
+
+** One-time setup
+
+#+begin_src bash
+git config rerere.enabled true
+#+end_src
+
+** Start a topic
+
+#+begin_src bash
+git fetch upstream
+git switch -c repolist/local-variable-p upstream/main
+#+end_src
+
+In Magit: =b c= in the status buffer, start point =upstream/main=, then the
+name.  Either way, Git records =upstream/main= as the branch's upstream
+(Magit's "Merge:" line), while =remote.pushDefault= sends =P p= to =origin=.
+Under =push.default=simple=, plain Git does not resolve =@{push}= for this
+split, so prefer Magit's =P p= or name the remote and branch explicitly.
+
+A stacked topic starts from the topic it depends on instead:
+
+#+begin_src bash
+git switch -c repolist/async-fetch repolist/group-headers
+#+end_src
+
+** Commit style
+
+Match Magit's history: subject =function-name: Summary in sentence case=, no
+trailing period, body wrapped near 70 columns explaining why.  See
+=git log --oneline -- lisp/magit-repos.el= for examples.
+
+- A fix for a regression cites the commit that caused it as a footnote, as in
+  =eb8c592f=: =[1: 58a46982]= in the text, and below it
+  =1: <date> <full hash>= followed by the indented subject.
+- Regression tests go in a separate, following commit titled
+  =test: Prevent fixed <function> regression=, as in =d08eca92=.
+- Commits carrying a =Co-Authored-By: Claude= trailer contain generated code;
+  rewrite those before proposing them upstream.
+
+** Rebuild the integration branch
+
+Run after any topic changes.  It refuses to run with uncommitted tracked
+changes and stops at the first conflict, which =rerere= may already know how
+to resolve.
+
+#+begin_src bash
+#!/usr/bin/env bash
+set -euo pipefail
+topics=(repolist/local-variable-p
+        repolist/group-headers
+        repolist/async-fetch
+        repolist/unmark-all)
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "Uncommitted tracked changes; aborting." >&2
+  exit 1
+fi
+git fetch upstream
+git switch -C gjg upstream/main
+for t in "${topics[@]}"; do
+  git rev-parse --verify --quiet "refs/heads/$t" >/dev/null ||
+    { echo "skip $t (no such branch)"; continue; }
+  git merge --no-ff --no-edit "$t"
+done
+git log --oneline --graph upstream/main..gjg
+echo "Review, then: git push --force-with-lease origin gjg"
+#+end_src
+
+** Follow upstream
+
+#+begin_src bash
+git fetch upstream
+git switch main && git merge --ff-only upstream/main && git push origin main
+git switch repolist/async-fetch
+git rebase --update-refs upstream/main   # moves the whole stack
+#+end_src
+
+Rebase independent topics one at a time, then rebuild =gjg=.
+
+* Testing on perihelion
+
+=make= finds dependencies under =ELPA_DIR= or as sibling directories.
+Perihelion has no Emacs package directory, and Emacs 32 already provides
+=compat=, =seq=, and =transient= 0.13.9.  The rest must be cloned next to this
+repository:
+
+#+begin_src bash
+cd ~/projects/emacs
+git clone https://github.com/tarsius/cond-let.git
+git clone https://github.com/tarsius/llama.git
+git clone https://github.com/magit/with-editor.git
+#+end_src
+
+Then, from the repository root:
+
+#+begin_src bash
+make lisp   # byte-compile, autoloads, check-declare
+make test   # full ERT suite
+#+end_src
+
+=make test= always runs the whole suite.  For a focused run, call Emacs
+directly with an ERT selector; this one runs tests whose names match
+"repolist".  =load-prefer-newer= keeps a stale =lisp/*.elc= from shadowing
+an edited source file:
+
+#+begin_src bash
+emacs -Q --batch --eval '(setq load-prefer-newer t)' \
+  -L lisp -L ../cond-let -L ../llama -L ../with-editor/lisp \
+  -l test/magit-tests.el --eval '(ert-run-tests-batch-and-exit "repolist")'
+#+end_src
+
+=make lisp= also compiles =test/magit-tests.elc=, which upstream's
+=.gitignore= does not cover; add =/test/*.elc= to =.git/info/exclude= or
+delete it after building.
+
+Remove stray =.elc= files from =lisp/= before switching to a branch with
+different sources; =make clean= does this.
+
+* Running the fork on the EXWM host
+
+Untested; verify on first use.
+
+1. Clone the fork and build the integration branch:
+   #+begin_src bash
+   git clone git@github.com:gregoryg/magit.git ~/projects/emacs/magit
+   cd ~/projects/emacs/magit && git switch gjg && make lisp
+   #+end_src
+   MELPA still provides =cond-let=, =llama=, =transient=, and =with-editor=;
+   =make= finds them in =~/.emacs.d/elpa=.
+2. Before the =use-package magit= form, put the fork ahead of MELPA:
+   #+begin_src emacs-lisp
+   (add-to-list 'load-path (expand-file-name "~/projects/emacs/magit/lisp"))
+   (load "magit-autoloads" nil t)
+   #+end_src
+   The =lisp/= directory provides both =magit= and =magit-section=.
+3. Restart Emacs and check =M-x magit-version= (it should describe =gjg=)
+   and =M-x list-load-path-shadows= (MELPA's =magit= and =magit-section=
+   should be shadowed).
+4. To update: =git pull --rebase= does not suit a force-pushed branch; use
+   =git fetch origin && git reset --hard origin/gjg && make lisp=.
+
+** Quick trial without rebuilding
+
+For a one-file change, load the edited source into the running Emacs over
+TRAMP; it redefines only that file's functions:
+
+#+begin_example
+M-x load-file RET /ssh:perihelion:projects/emacs/magit/lisp/magit-repos.el RET
+#+end_example
+
+Restart Emacs to return to the installed version.

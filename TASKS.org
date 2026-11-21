@@ -1,0 +1,91 @@
+#+title: Magit Repolist Fork Tasks
+#+date: 2026-11-21
+#+filetags: :emacs:magit:repolist:
+#+todo: TODO(t) STARTED IN-TEST BLOCKED | DONE DEFERRED
+
+Supersedes =problems.org=.  Rationale lives in [[file:PLANNING.org][PLANNING.org]];
+commands live in [[file:README-repolist-dev.org][README-repolist-dev.org]].
+
+* TODO Set up the fork workflow [5/9]
+- [X] Add the =upstream= remote (Gregory, 2026-11-21)
+- [X] Enable =git rerere= in this clone
+- [ ] Create the =gjg= integration branch and its rebuild script
+- [X] Decide where these planning files live: untracked, listed in
+  =.git/info/exclude=
+- [X] Install test dependencies on perihelion: =cond-let= 1.1.5, =llama=
+  1.0.6, =with-editor= 3.6.0 as sibling clones in =~/projects/emacs/=
+- [X] Confirm =make lisp= and =make test= pass on unmodified =main=
+  (baseline 2026-11-21 at =7a05d472=: 0 compiler warnings; 37/37 tests, of
+  which 3 cover the repository list)
+- [ ] Clone the fork on the EXWM host and load =gjg= ahead of MELPA Magit.
+  Urgent: the force-global advice is commented out, so MELPA Magit opens
+  per-directory lists again after the next restart
+- [ ] Track these notes on an orphan =notes= branch in an excluded =.notes/=
+  worktree (proposed 2026-11-21; recipe in the developer guide)
+- [ ] Optional: enable GitHub Actions on the fork, so pushed topics are
+  compiled and tested by upstream's shared workflows
+
+* DONE Select the global list unless the option is buffer-local [4/4]
+Branch =repolist/local-variable-p=, committed as =9d784738= (fix) and
+=82225247= (test).  Replace =buffer-local-boundp= with =local-variable-p= in
+=magit-repolist-setup=.  =make lisp= clean, =make test= 39/39; accepted on
+the EXWM host 2026-11-21 by loading the file over TRAMP.
+- [X] ERT: global value gives the =*Magit Repositories*= buffer
+  (=magit-repolist-setup:global=, fails before the fix)
+- [X] ERT: a buffer-local value gives a per-directory buffer, and a prefix
+  argument still forces the global list (=magit-repolist-setup:dir-locals=)
+- [X] Manual, EXWM host: global list from =*scratch*= and from a repository
+- [X] Remove the =gjg/magit-repolist-force-global= advice
+
+* TODO Name per-directory list buffers after their list directory [0/2]
+Separate topic, not yet branched.  =magit-repolist-setup= names the buffer
+from the invoking buffer's =default-directory=, not from the directory
+holding =.dir-locals.el=, so invoking from two subdirectories opens two
+buffers showing the same list.
+- [ ] Bind =default-directory= to the list directory when generating the name
+- [ ] ERT: invoking from two subdirectories reuses one buffer
+
+* TODO Skip group header lines when collecting repositories [0/4]
+Branch =repolist/group-headers=.  =magit-repolist--marked-repos= and
+=magit-repolist--mapc= ignore lines without an id.
+- [ ] ERT, Emacs 30+: marked repositories exclude group headings
+- [ ] ERT, Emacs 30+: =all= excludes group headings
+- [ ] Manual: upstream =f= and =5= work with groups and marks
+- [ ] Remove =gjg/magit-repolist--target-repos= once fetch no longer needs it
+
+* TODO Add =U= to unmark all repositories [0/2]
+Branch =repolist/unmark-all=.
+- [ ] Check =tabulated-list-clear-all-tags= exists in Emacs 28.1
+- [ ] Bind =U= and mention it in the manual's repository-list node
+
+* TODO Make fetch non-blocking, fail fast, and report failures [0/8]
+Branch =repolist/async-fetch=, stacked on =repolist/group-headers=.
+- [ ] Settle approach A or B (PLANNING: "Fetch design")
+- [ ] Verify the prompt-detection hook point and TRAMP behavior
+- [ ] Implement sequential asynchronous fetch with per-row refresh
+- [ ] Show per-repository outcome and a final summary
+- [ ] ERT for the state machine with stubbed processes
+- [ ] Manual, EXWM host: a repository whose key is not in the agent fails
+  fast while Emacs stays responsive
+- [ ] Manual, EXWM host: TRAMP repositories on perihelion
+- [ ] Remove =gjg/magit-repolist-fetch= and its =f= binding
+
+* TODO Fix group heading highlight in config [0/4]
+Config only (=~/emacs-gregoryg/README.org=, "Filter groups for Magit
+repolist"), unless grouping goes upstream.
+- [ ] Give group names a face with =propertize=; drop
+  =outline-minor-mode-highlight=
+- [ ] Set =outline-regexp= locally so marked rows are not headings
+- [ ] Set =tabulated-list-padding= to 2 in the hook so marking never reprints
+- [ ] Manual: highlight survives open, mark, sort and refresh
+
+* DEFERRED Make list refresh asynchronous
+Every column runs git per repository on each refresh; TRAMP makes this slow.
+Revisit after fetch, which will establish the asynchronous pattern.
+
+* DEFERRED Propose filter groups upstream
+Needs a fallback for Emacs before 30.  Start as a GitHub Discussion.
+
+* DEFERRED Engage upstream in 2027
+Open Discussions for async fetch and grouping, file bug issues once trackers
+reopen, and rewrite code personally for any pull request.
