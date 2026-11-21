@@ -513,6 +513,46 @@ Recent commits\n[[:xdigit:]]\\{7,\\} master dummy\\'"
         (should (equal (caar tabulated-list-entries) default-directory))
         (should (equal (aref (cadar tabulated-list-entries) 1) ""))))))
 
+(defun magit-test-repolist-setup (&optional force-global)
+  "Call `magit-repolist-setup' and return the buffer it displays."
+  (let ((orig (window-buffer)))
+    (magit-repolist-setup magit-repolist-columns force-global)
+    (prog1 (window-buffer)
+      (set-window-buffer nil orig))))
+
+(ert-deftest magit-repolist-setup:global ()
+  (magit-with-test-repository
+    (let ((magit-repository-directories (list (cons default-directory 0))))
+      (with-temp-buffer
+        (should-not (local-variable-p 'magit-repository-directories))
+        (let ((buffer (magit-test-repolist-setup)))
+          (unwind-protect
+              (should (equal (buffer-name buffer) "*Magit Repositories*"))
+            (kill-buffer buffer)))))))
+
+(ert-deftest magit-repolist-setup:dir-locals ()
+  (magit-with-test-repository
+    (let ((dir default-directory))
+      (with-temp-file ".dir-locals.el"
+        (prin1 `((nil . ((magit-repository-directories . ((,dir . 0))))))
+               (current-buffer)))
+      (with-temp-buffer
+        (setq default-directory dir)
+        (hack-dir-local-variables-non-file-buffer)
+        (should (local-variable-p 'magit-repository-directories))
+        (let ((buffer (magit-test-repolist-setup)))
+          (unwind-protect
+              (with-current-buffer buffer
+                (should-not (equal (buffer-name) "*Magit Repositories*"))
+                (should (equal default-directory dir))
+                (should (equal (mapcar #'car tabulated-list-entries)
+                               (list dir))))
+            (kill-buffer buffer)))
+        (let ((buffer (magit-test-repolist-setup t)))
+          (unwind-protect
+              (should (equal (buffer-name buffer) "*Magit Repositories*"))
+            (kill-buffer buffer)))))))
+
 ;;; Utils
 
 (ert-deftest magit-utils:add-face-text-property ()
