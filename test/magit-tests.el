@@ -541,6 +541,76 @@ Like the mark, the group headings begin with \"*\"."
       (magit-repolist--mapc (lambda () (push default-directory dirs)) 'all)
       (should (equal (nreverse dirs) '("/a/" "/b/" "/c/"))))))
 
+(defmacro magit-test-with-fetch-repolist (&rest body)
+  "Evaluate BODY in a list of repositories with different remotes.
+Fetching in \"good\" succeeds, in \"bad\" it fails, in \"prompt\" ssh asks
+for a passphrase in two pieces and then hangs, and in \"slow\" it
+only hangs."
+  (declare (indent 0) (debug t))
+  `(magit-with-test-directory
+     (magit-test-init-repo "origin")
+     (dolist (name '("good" "bad" "prompt" "slow"))
+       (magit-test-init-repo name))
+     (let ((origin (expand-file-name "origin")))
+       (magit-git "-C" "good" "remote" "add" "origin" origin)
+       (magit-git "-C" "bad" "remote" "add" "origin" (concat origin "-missing"))
+       (dolist (name '("prompt" "slow"))
+         (magit-git "-C" name "remote" "add" "origin" "ssh://example.invalid/x")
+         ;; Otherwise Git first runs the command to detect its variant.
+         (magit-git "-C" name "config" "ssh.variant" "ssh")))
+     ;; Emacs receives the prompt in two pieces of output.
+     (magit-git "-C" "prompt" "config" "core.sshCommand"
+                (concat "printf 'Enter passphrase' >&2; sleep 1;"
+                        " printf ' for key x: ' >&2; sleep 30 #"))
+     (magit-git "-C" "slow" "config" "core.sshCommand" "sleep 30 #")
+     (let ((magit-repository-directories (list (cons default-directory 1))))
+       (with-temp-buffer
+         (magit-repolist-mode)
+         (magit-repolist-setup-1)
+         (magit-repolist-refresh)
+         ,@body))))
+
+(defun magit-test-repolist-fetch-wait ()
+  "Wait for the fetch in the current buffer, failing after 10 seconds."
+  (let ((deadline (+ (float-time) 10)))
+    (while (and (magit-repolist--fetch-running-p)
+                (< (float-time) deadline))
+      (accept-process-output nil 0.1)))
+  (should-not (magit-repolist--fetch-running-p)))
+
+(defun magit-test-repolist-fetch-marked ()
+  "Return the sorted names of the repositories marked with \"*\"."
+  (sort (mapcar (lambda (id) (file-name-nondirectory (directory-file-name id)))
+                (magit-repolist--marked-repos ?*))
+        #'string<))
+
+(ert-deftest magit-repolist-fetch:async ()
+  (magit-test-with-fetch-repolist
+    (let ((start (float-time))
+          (ids (seq-remove (##string-suffix-p "/slow/" %)
+                           (mapcar #'car tabulated-list-entries))))
+      (magit-repolist-fetch ids)
+      ;; Fetching does not block.
+      (should (magit-repolist--fetch-running-p))
+      (magit-test-repolist-fetch-wait)
+      ;; The prompt was answered by stopping that fetch, not by waiting.
+      (should (< (- (float-time) start) 10))
+      ;; Only failures remain marked, so fetching again retries them.
+      (should (equal (magit-test-repolist-fetch-marked) '("bad" "prompt"))))))
+
+(ert-deftest magit-repolist-fetch:cancel ()
+  (magit-test-with-fetch-repolist
+    (let ((ids (seq-filter (##string-match-p "/\\(good\\|slow\\)/\\'" %)
+                           (mapcar #'car tabulated-list-entries))))
+      (magit-repolist-fetch ids)
+      (should (magit-repolist--fetch-running-p))
+      ;; Calling the command again offers to cancel.
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+        (magit-repolist-fetch nil))
+      (magit-test-repolist-fetch-wait)
+      ;; "good" may already be done; "slow" is not.
+      (should (member "slow" (magit-test-repolist-fetch-marked))))))
+
 (ert-deftest magit-repolist-refresh:no-commits ()
   (magit-with-test-repository
     (let ((magit-repository-directories (list (cons default-directory 0))))
