@@ -540,6 +540,19 @@ Recent commits\n[[:xdigit:]]\\{7,\\} master dummy\\'"
     (magit-repolist-fetch (magit-repolist--get-repos ?*))
     (should (equal (magit-test-repolist-marked) '("b")))))
 
+(ert-deftest magit-repolist-unmark-all ()
+  (magit-test-with-repolist
+    (magit-repolist-unmark-all)
+    (should-not (magit-test-repolist-marked))
+    (magit-test-repolist-mark #'magit-repolist-mark "a" "b" "c")
+    (magit-test-repolist-mark #'magit-repolist-unmark "b")
+    (revert-buffer)
+    (should (equal (magit-test-repolist-marked) '("a" "c")))
+    (magit-repolist-unmark-all)
+    (should-not (magit-test-repolist-marked))
+    (revert-buffer)
+    (should-not (magit-test-repolist-marked))))
+
 (ert-deftest magit-repolist-column-version:no-commits ()
   (magit-with-test-repository
     (should-not (magit-repolist-column-version nil))))

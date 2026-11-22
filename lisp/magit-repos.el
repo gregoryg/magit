@@ -296,6 +296,7 @@ If it contains \"%s\" then the directory is substituted for that."
   "C-m" #'magit-repolist-status
   "m"   #'magit-repolist-mark
   "u"   #'magit-repolist-unmark
+  "U"   #'magit-repolist-unmark-all
   "f"   #'magit-repolist-fetch
   "5"   #'magit-repolist-find-file-other-frame
   "<remap> <dired-jump>" #'magit-dired-jump)
@@ -306,6 +307,8 @@ If it contains \"%s\" then the directory is substituted for that."
   :group 'magit-repolist
   (setq-local x-stretch-cursor nil)
   (setq tabulated-list-padding 0)
+  (setq tabulated-list-printer #'magit-repolist--print-entry)
+  (setq magit-repolist--marks (make-hash-table :test #'equal))
   (setq-local tabulated-list-revert-hook (list #'magit-repolist-refresh t))
   (setq imenu-prev-index-position-function
         #'magit-repolist--imenu-prev-index-position)
