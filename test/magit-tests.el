@@ -492,6 +492,54 @@ Recent commits\n[[:xdigit:]]\\{7,\\} master dummy\\'"
 
 ;;; Repository List
 
+(defmacro magit-test-with-repolist (&rest body)
+  "Evaluate BODY in a list of the repositories \"a\", \"b\" and \"c\"."
+  (declare (indent 0) (debug t))
+  `(magit-with-test-directory
+     (dolist (name '("a" "b" "c"))
+       (magit-test-init-repo name))
+     (let ((magit-repository-directories (list (cons default-directory 1))))
+       (with-temp-buffer
+         (magit-repolist-mode)
+         (magit-repolist-setup-1)
+         (magit-repolist-refresh)
+         ,@body))))
+
+(defun magit-test-repolist-name ()
+  "Return the name of the repository at point, or nil."
+  (and-let* ((id (tabulated-list-get-id)))
+    (file-name-nondirectory (directory-file-name id))))
+
+(defun magit-test-repolist-mark (fn &rest names)
+  "Call FN on the line of each repository in NAMES."
+  (dolist (name names)
+    (goto-char (point-min))
+    (while (and (not (equal (magit-test-repolist-name) name))
+                (zerop (forward-line))))
+    (should (equal (magit-test-repolist-name) name))
+    (funcall fn)))
+
+(defun magit-test-repolist-marked ()
+  "Return the sorted names of the repositories marked with \"*\"."
+  (sort (mapcar (lambda (id) (file-name-nondirectory (directory-file-name id)))
+                (magit-repolist--marked-repos ?*))
+        #'string<))
+
+(ert-deftest magit-repolist-mark:redraw ()
+  (magit-test-with-repolist
+    (magit-test-repolist-mark #'magit-repolist-mark "a" "c")
+    (should (equal (magit-test-repolist-marked) '("a" "c")))
+    (revert-buffer)
+    (should (equal (magit-test-repolist-marked) '("a" "c")))
+    (tabulated-list-sort 0)
+    (should (equal (magit-test-repolist-marked) '("a" "c")))))
+
+(ert-deftest magit-repolist-mark:fetch ()
+  (magit-test-with-repolist
+    (magit-test-repolist-mark #'magit-repolist-mark "b")
+    (magit-repolist-fetch (magit-repolist--get-repos ?*))
+    (should (equal (magit-test-repolist-marked) '("b")))))
+
 (ert-deftest magit-repolist-column-version:no-commits ()
   (magit-with-test-repository
     (should-not (magit-repolist-column-version nil))))
