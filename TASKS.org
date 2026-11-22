@@ -6,23 +6,24 @@
 Supersedes =problems.org=.  Rationale lives in [[file:PLANNING.org][PLANNING.org]];
 commands live in [[file:README-repolist-dev.org][README-repolist-dev.org]].
 
-* TODO Set up the fork workflow [5/9]
+* DONE Set up the fork workflow [9/9]
 - [X] Add the =upstream= remote (Gregory, 2026-11-21)
 - [X] Enable =git rerere= in this clone
-- [ ] Create the =gjg= integration branch and its rebuild script
+- [X] Create the =gjg= integration branch (Gregory, 2026-11-21; the rebuild
+  script is in the developer guide)
 - [X] Decide where these planning files live: untracked, listed in
-  =.git/info/exclude=
+  =.git/info/exclude= (superseded by the =notes= branch below)
 - [X] Install test dependencies on perihelion: =cond-let= 1.1.5, =llama=
   1.0.6, =with-editor= 3.6.0 as sibling clones in =~/projects/emacs/=
 - [X] Confirm =make lisp= and =make test= pass on unmodified =main=
   (baseline 2026-11-21 at =7a05d472=: 0 compiler warnings; 37/37 tests, of
   which 3 cover the repository list)
-- [ ] Clone the fork on the EXWM host and load =gjg= ahead of MELPA Magit.
-  Urgent: the force-global advice is commented out, so MELPA Magit opens
-  per-directory lists again after the next restart
-- [ ] Track these notes on an orphan =notes= branch in an excluded =.notes/=
-  worktree (proposed 2026-11-21; recipe in the developer guide)
-- [ ] Optional: enable GitHub Actions on the fork, so pushed topics are
+- [X] Clone =gjg= on the EXWM host straight from perihelion and load it
+  with =:load-path= ahead of MELPA Magit (Gregory, 2026-11-21;
+  =locate-library= and =magit-version= confirmed)
+- [X] Track these notes on an orphan =notes= branch in an excluded =.notes/=
+  worktree (Gregory, 2026-11-21)
+- [X] Optional: enable GitHub Actions on the fork, so pushed topics are
   compiled and tested by upstream's shared workflows
 
 * DONE Select the global list unless the option is buffer-local [4/4]
@@ -45,20 +46,36 @@ buffers showing the same list.
 - [ ] Bind =default-directory= to the list directory when generating the name
 - [ ] ERT: invoking from two subdirectories reuses one buffer
 
-* TODO Skip group header lines when collecting repositories [0/4]
-Branch =repolist/group-headers=.  =magit-repolist--marked-repos= and
-=magit-repolist--mapc= ignore lines without an id.
-- [ ] ERT, Emacs 30+: marked repositories exclude group headings
-- [ ] ERT, Emacs 30+: =all= excludes group headings
-- [ ] Manual: upstream =f= and =5= work with groups and marks
-- [ ] Remove =gjg/magit-repolist--target-repos= once fetch no longer needs it
+* DONE Skip group header lines when collecting repositories [4/4]
+Branch =repolist/group-headers=, committed as =86376522=.
+=magit-repolist--marked-repos= and =magit-repolist--mapc= ignore lines
+without an id.  Both tests fail before the fix; =make lisp= clean,
+=make test= 39/39.  In =gjg= since 2026-11-22 (7/7 repository-list tests);
+accepted on the EXWM host the same day.
+- [X] ERT, Emacs 30+: marked repositories exclude group headings
+  (=magit-repolist--marked-repos:groups=)
+- [X] ERT, Emacs 30+: =all= excludes group headings
+  (=magit-repolist--mapc:groups=)
+- [X] Manual: upstream =f= and =5= work with groups and marks (Gregory,
+  2026-11-22: marked fetch, fetch all, and =5= with marks)
+- [X] Remove =gjg/magit-repolist--target-repos= (Gregory, 2026-11-22,
+  together with =gjg/magit-repolist-fetch=)
 
-* TODO Add =U= to unmark all repositories [0/2]
-Branch =repolist/unmark-all=.
-- [ ] Check =tabulated-list-clear-all-tags= exists in Emacs 28.1
+* TODO Keep marks across redraws, and add =U= to unmark all [1/5]
+Branch =repolist/marks= from =upstream/main=; replaces the planned
+=repolist/unmark-all=.  Every redraw erases marks: =g=, sorting, and the
+refresh after each repository's fetch, so a failed bulk fetch cannot be
+re-run on the same marks (Gregory, 2026-11-21; reproduced in batch).  Do
+this before fetch.  Design in PLANNING, "Marks do not survive a redraw".
+- [X] Check =tabulated-list-clear-all-tags= exists in Emacs 28.1 (since
+  27.1; signals an error while the padding is 0)
+- [ ] Store marks per repository and reapply them in a
+  =tabulated-list-printer=
+- [ ] ERT: marks survive =revert-buffer= and sorting; =u= and =U= clear them
 - [ ] Bind =U= and mention it in the manual's repository-list node
+- [ ] Manual, EXWM host: mark, =g=, sort, fetch, =U=, with groups
 
-* TODO Make fetch non-blocking, fail fast, and report failures [0/8]
+* TODO Make fetch non-blocking, fail fast, and report failures [1/8]
 Branch =repolist/async-fetch=, stacked on =repolist/group-headers=.
 - [ ] Settle approach A or B (PLANNING: "Fetch design")
 - [ ] Verify the prompt-detection hook point and TRAMP behavior
@@ -68,7 +85,8 @@ Branch =repolist/async-fetch=, stacked on =repolist/group-headers=.
 - [ ] Manual, EXWM host: a repository whose key is not in the agent fails
   fast while Emacs stays responsive
 - [ ] Manual, EXWM host: TRAMP repositories on perihelion
-- [ ] Remove =gjg/magit-repolist-fetch= and its =f= binding
+- [X] Remove =gjg/magit-repolist-fetch= and its =f= binding (Gregory,
+  2026-11-22; =f= is upstream's synchronous fetch until this task lands)
 
 * TODO Fix group heading highlight in config [0/4]
 Config only (=~/emacs-gregoryg/README.org=, "Filter groups for Magit
@@ -88,4 +106,5 @@ Needs a fallback for Emacs before 30.  Start as a GitHub Discussion.
 
 * DEFERRED Engage upstream in 2027
 Open Discussions for async fetch and grouping, file bug issues once trackers
-reopen, and rewrite code personally for any pull request.
+reopen, and rewrite code personally for any pull request.  Procedure: the
+developer guide, "Proposing a topic upstream".

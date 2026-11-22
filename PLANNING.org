@@ -9,9 +9,10 @@ Gregory runs MELPA Magit on the EXWM host, with workarounds in
 =magit-list-repositories= for daily use and to keep each fix in a shape that
 could go upstream.
 
-The first topic, =repolist/local-variable-p=, was committed and accepted on
-2026-11-21.  The other topics are planned, and the EXWM host does not run
-the fork yet.
+Since 2026-11-21 the EXWM host runs the =gjg= integration branch.  The
+first topic, =repolist/local-variable-p=, is committed and accepted;
+=repolist/group-headers= is implemented and awaiting its commit.  The other
+topics are planned.
 
 Executable status lives in [[file:TASKS.org][TASKS.org]].  Setup and branch
 mechanics live in [[file:README-repolist-dev.org][README-repolist-dev.org]].
@@ -48,7 +49,10 @@ runs the combination of all topics now, through an integration branch.
 Claude writes the code.  Magit's =.github/CONTRIBUTING.md= rejects
 LLM-generated code, so upstream engagement starts with GitHub Discussions
 (features) and issues (bugs, once trackers reopen in early 2027).  Any pull
-request uses code Gregory rewrites himself.
+request uses code Gregory rewrites himself.  The same policy allows an LLM
+to investigate an issue only if that is disclosed upfront and the findings
+are told in the contributor's own words, so a pull request says so, and
+Gregory writes its prose too.
 
 Why: the need is immediate, Gregory wants to learn the topic-branch workflow,
 and the shape keeps an upstream path open without blocking daily use on it.
@@ -60,12 +64,18 @@ and the shape keeps an upstream path open without blocking daily use on it.
   A topic that depends on another is stacked on it and moved with
   =git rebase --update-refs=.
 - =gjg= is the integration branch.  It is rebuilt from =upstream/main= by
-  merging the topics in a fixed order, never edited directly, and
-  force-pushed to =origin=.  It is the only branch the EXWM host runs.
+  merging the topics in a fixed order and never edited directly.  It is the
+  only branch the EXWM host runs, from a clone that fetches straight from
+  perihelion over SSH.  Pushing it to =origin= is optional: a backup, and a
+  way to run GitHub Actions.
 - =git rerere= records conflict resolutions, because every topic touches
   =lisp/magit-repos.el=.
-- No worktree is needed: no Emacs loads code from perihelion.  Revisit if
-  topics need to be checked out side by side.
+- Topics share the main worktree.  Revisit if they need to be checked out
+  side by side.
+- These notes live on an orphan =notes= branch, checked out at =.notes/=
+  and excluded from the main worktree, so they have history without
+  entering any topic.  Gregory moved them there on 2026-11-21, because
+  progress was hard to follow in untracked files.
 
 Upstream is quiet until early 2027, so rebasing onto it should be rare.
 
@@ -95,7 +105,9 @@ marked, and group headings start with =*=, the mark character.  With =all=,
 =magit-repolist--mapc= collects every line.  Both yield =nil= ids, and
 =expand-file-name= then signals.  Fix: skip lines without a
 =tabulated-list-get-id=.  This is harmless on Emacs 28, where groups do not
-exist.  Workaround: =gjg/magit-repolist--target-repos=.
+exist.  Both functions date from 2022 (=f0296148=); groups arrived in Emacs
+30.1 three years later, and Magit does not group repositories itself.
+Workaround: =gjg/magit-repolist--target-repos=.
 
 ** Group heading highlight is lost
 
@@ -109,11 +121,30 @@ makes them level-1 headings, which breaks folding and heading motion.  This
 only matters with grouping, so it is fixed in config unless grouping goes
 upstream.
 
+** Marks do not survive a redraw
+
+Marks exist only as text in each row's padding, so every full redraw erases
+them: =g=, sorting by a column, and the =magit-refresh= that follows each
+repository's fetch.  Reproduced in batch on 2026-11-21; the redraw code is
+unchanged upstream code.  The last case means a failed bulk fetch cannot
+simply be re-run on the same marks.  Emacs's own list modes behave the same
+way.  The UPDATE mode of =tabulated-list-print= keeps tags only on unchanged
+rows, and only when the list is sorted, so it does not help: after a fetch,
+the marked rows are the ones that changed.
+
+Fix: keep marks in a buffer-local table from repository id to mark, which
+=m=, =u=, and =U= maintain, and set =tabulated-list-printer= to a function
+that prints each entry and then reapplies its mark.  Every redraw goes
+through the printer, including sorting and the per-row updates planned for
+fetch.  Both pieces exist in Emacs 28.
+
 ** No command to unmark all
 
-Upstream has =m= and =u= only.  Emacs provides
-=tabulated-list-clear-all-tags=; its availability in Emacs 28.1 (Magit's
-minimum) is still to be checked.
+Upstream has =m= and =u= only.  =tabulated-list-clear-all-tags= exists since
+Emacs 27.1, but signals an error while the padding is 0, before anything
+was marked.  With marks kept in a table, =U= must clear the table too, or
+the marks return at the next redraw, so =U= shares the topic
+=repolist/marks=.
 
 ** Fetch blocks Emacs and hides failures
 
@@ -129,6 +160,9 @@ buffer works.
 
 Refreshing the list is synchronous as well: every column runs at least one git
 command per repository, and TRAMP repositories pay a round trip for each.
+Bulk fetch multiplies this: =magit-run-git= ends with =magit-refresh=, which
+reverts a tabulated list, so fetching N repositories refreshes the whole list
+N times (observed in batch, 2026-11-21).
 
 * Fetch design (open)
 
@@ -139,7 +173,8 @@ Requirements:
   fetch (decided 2026-11-21: Gregory prefers fail-fast over prompting);
 - per-repository outcome visible in the list, plus a summary message;
 - each row refreshed as its fetch completes;
-- a way to cancel, and to re-run on failed or marked repositories; and
+- a way to cancel, and to re-run on failed or marked repositories, which
+  needs marks to survive the fetch; and
 - correct behavior for TRAMP repositories.
 
 Candidate approaches:
@@ -154,7 +189,9 @@ Candidate approaches:
 
 Leaning towards B; verify Magit's prompt hook point and TRAMP behavior before
 building.  Also open: whether results appear as a dedicated column, a flag,
-or a face on the row.
+or a face on the row.  One option is to give each failed repository a mark
+of its own, so that re-running the failures is an ordinary marked fetch;
+that relies on =repolist/marks=.
 
 * Grouping upstream (open)
 

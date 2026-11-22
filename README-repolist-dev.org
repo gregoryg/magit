@@ -4,39 +4,29 @@
 
 How to work on, test, and run Gregory's fork of Magit's repository list.
 Direction and decisions are in [[file:PLANNING.org][PLANNING.org]]; status is in
-[[file:TASKS.org][TASKS.org]].  Magit's own [[file:README.org][README.org]] is untouched.
+[[file:TASKS.org][TASKS.org]].  Magit's own [[file:../README.org][README.org]] is untouched.
 
 * Where these notes live
 
-=PLANNING.org=, =TASKS.org=, and this file are untracked at the repository
-root, so they stay put across branch switches and never enter a topic branch.
-They are listed in =.git/info/exclude=, next to the existing =AGENTS.md=
-entries, so that =git status= stays quiet and =git add -A= cannot sweep them
-into a commit.  They have no history.
+=PLANNING.org=, =TASKS.org=, this file, and the superseded =problems.org=
+live on the orphan =notes= branch, checked out as a worktree at =.notes/=.
+The main worktree lists =.notes/= in =.git/info/exclude=, so the notes never
+enter a topic branch.  Commit them from =.notes/=, for example from the Magit
+status buffer of any file there.
 
-** Moving them to a =notes= branch
+All worktrees share =.git/info/exclude=, so it must not list the notes' own
+file names, or =git add= in =.notes/= silently skips them.
 
-To give the notes history without touching any topic branch, keep them on an
-orphan =notes= branch checked out as an excluded =.notes/= worktree.  Save
-the files and kill their Emacs buffers first, then run from the repository
-root:
+The worktree was created on 2026-11-21 with:
 
 #+begin_src bash
 git worktree add --orphan -b notes .notes
 echo '.notes/' >> .git/info/exclude
-mv PLANNING.org TASKS.org README-repolist-dev.org problems.org .notes/
-sed -i -E '/^(PLANNING|TASKS|README-repolist-dev|problems)\.org$/d' \
-  .git/info/exclude
-git -C .notes add .
-git -C .notes commit -m 'Add repository list fork notes'
 #+end_src
 
-All worktrees share =.git/info/exclude=, so the four file names must leave
-it, or =git add= in =.notes/= silently skips them.  =notes= can stay a local
-branch; pushing it to =origin= publishes it with the fork.
-
-Tested 2026-11-21 in a throwaway repository with git 2.47.3: the main
-worktree stays clean, and =.notes/= shows only as ignored.
+A clone of this repository receives the branch as =origin/notes=.  To read
+the notes there, run =git worktree add .notes notes= and exclude =.notes/=.
+=notes= can stay off GitHub; pushing it to the fork publishes it.
 
 * Branches
 
@@ -45,13 +35,14 @@ worktree stays clean, and =.notes/= shows only as ignored.
 | =main=            | =upstream/main=                    | Mirror; fast-forward only          |
 | =repolist/<slug>= | =upstream/main=                    | One logical fix, upstream-shaped   |
 | =gjg=             | =upstream/main=, rebuilt by script | All topics merged; what Emacs runs |
+| =pr/<slug>=       | topic's base, then =upstream/main= | Hand rewrite for a pull request    |
 
 Current topics, in merge order:
 
 1. =repolist/local-variable-p=
 2. =repolist/group-headers=
-3. =repolist/async-fetch= (stacked on =repolist/group-headers=)
-4. =repolist/unmark-all=
+3. =repolist/marks=
+4. =repolist/async-fetch= (stacked on =repolist/group-headers=)
 
 ** One-time setup
 
@@ -90,7 +81,8 @@ trailing period, body wrapped near 70 columns explaining why.  See
 - Regression tests go in a separate, following commit titled
   =test: Prevent fixed <function> regression=, as in =d08eca92=.
 - Commits carrying a =Co-Authored-By: Claude= trailer contain generated code;
-  rewrite those before proposing them upstream.
+  rewrite those before proposing them upstream (see "Proposing a topic
+  upstream").
 
 ** Rebuild the integration branch
 
@@ -98,28 +90,28 @@ Run after any topic changes.  It refuses to run with uncommitted tracked
 changes and stops at the first conflict, which =rerere= may already know how
 to resolve.
 
-#+begin_src bash
-#!/usr/bin/env bash
-set -euo pipefail
-topics=(repolist/local-variable-p
-        repolist/group-headers
-        repolist/async-fetch
-        repolist/unmark-all)
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "Uncommitted tracked changes; aborting." >&2
-  exit 1
-fi
-git fetch upstream
-git switch -C gjg upstream/main
-for t in "${topics[@]}"; do
-  git rev-parse --verify --quiet "refs/heads/$t" >/dev/null ||
-    { echo "skip $t (no such branch)"; continue; }
-  git merge --no-ff --no-edit "$t"
-done
-git log --oneline --graph upstream/main..gjg
-echo "Review, then: git push --force-with-lease origin gjg"
+#+begin_src bash :results verbatim
+  #!/usr/bin/env bash
+  cd "$(git rev-parse --path-format=absolute --git-common-dir)/.."
+  set -euo pipefail
+  topics=(repolist/local-variable-p
+          repolist/group-headers
+          repolist/marks
+          repolist/async-fetch)
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo "Uncommitted tracked changes; aborting." >&2
+    exit 1
+  fi
+  git fetch upstream
+  git switch -C gjg upstream/main
+  for t in "${topics[@]}"; do
+    git rev-parse --verify --quiet "refs/heads/$t" >/dev/null ||
+      { echo "skip $t (no such branch)"; continue; }
+    git merge --no-ff --no-edit "$t"
+  done
+  git log --oneline --graph upstream/main..gjg
+  echo "Review, then update the EXWM host (see 'Running the fork')."
 #+end_src
-
 ** Follow upstream
 
 #+begin_src bash
@@ -164,34 +156,55 @@ emacs -Q --batch --eval '(setq load-prefer-newer t)' \
 #+end_src
 
 =make lisp= also compiles =test/magit-tests.elc=, which upstream's
-=.gitignore= does not cover; add =/test/*.elc= to =.git/info/exclude= or
-delete it after building.
+=.gitignore= does not cover; this clone lists =test/*.elc= in
+=.git/info/exclude=.
 
 Remove stray =.elc= files from =lisp/= before switching to a branch with
 different sources; =make clean= does this.
 
 * Running the fork on the EXWM host
 
-Untested; verify on first use.
+The EXWM host clones this repository straight from perihelion over SSH,
+using the same SSH setup as TRAMP; no hosting service is involved.  The clone
+is only for running the fork: never edit or commit there.
 
-1. Clone the fork and build the integration branch:
+Cloning =gjg= was tested 2026-11-21 with a local clone on perihelion; the
+EXWM side is untested, so verify it on first use.
+
+1. Clone the integration branch and build it with the host's own Emacs:
    #+begin_src bash
-   git clone git@github.com:gregoryg/magit.git ~/projects/emacs/magit
-   cd ~/projects/emacs/magit && git switch gjg && make lisp
+   git clone -b gjg perihelion:projects/emacs/magit ~/projects/emacs/magit
+   cd ~/projects/emacs/magit && make lisp
    #+end_src
-   MELPA still provides =cond-let=, =llama=, =transient=, and =with-editor=;
-   =make= finds them in =~/.emacs.d/elpa=.
-2. Before the =use-package magit= form, put the fork ahead of MELPA:
+   Do not copy =.elc= files from perihelion: Emacs 32 compiled them.
+   =make= finds =cond-let=, =llama=, =transient=, and =with-editor= in
+   =~/.emacs.d/elpa=, where MELPA installed them; set =ELPA_DIR= if they
+   live elsewhere.
+2. Add the clone to the =use-package magit= form:
    #+begin_src emacs-lisp
-   (add-to-list 'load-path (expand-file-name "~/projects/emacs/magit/lisp"))
-   (load "magit-autoloads" nil t)
+   (use-package magit
+     :load-path "~/projects/emacs/magit/lisp"
+     ...)
    #+end_src
-   The =lisp/= directory provides both =magit= and =magit-section=.
-3. Restart Emacs and check =M-x magit-version= (it should describe =gjg=)
-   and =M-x list-load-path-shadows= (MELPA's =magit= and =magit-section=
-   should be shadowed).
-4. To update: =git pull --rebase= does not suit a force-pushed branch; use
-   =git fetch origin && git reset --hard origin/gjg && make lisp=.
+   Keep MELPA's =magit= installed: Forge and other packages depend on it,
+   and it brings in Magit's dependencies.  =:load-path= puts the clone
+   first, so it shadows MELPA's =magit= and =magit-section=.  MELPA's
+   autoloads name files rather than paths, so they load the clone's code.
+   Only a command that the fork newly autoloads would also need
+   =(load "magit-autoloads" nil t)= in =:init=.
+3. Restart Emacs.  =M-: (locate-library "magit-repos")= should name the
+   clone, and =M-x magit-version= should describe =gjg=, for example
+   =v4.7.2-10-gd68433c1=.
+4. After each rebuild of =gjg= on perihelion, update and restart Emacs:
+   #+begin_src bash
+   cd ~/projects/emacs/magit
+   git fetch && git reset --hard origin/gjg && make lisp
+   #+end_src
+   Each rebuild replaces =gjg= with new commits, so =git pull= would try to
+   merge the old and new versions; =reset --hard= simply takes the new one.
+
+Pushing =gjg= to =origin= or to the self-hosted Gitea is optional: it gives
+a second source when perihelion is down, and GitHub can test it.
 
 ** Quick trial without rebuilding
 
@@ -203,3 +216,45 @@ M-x load-file RET /ssh:perihelion:projects/emacs/magit/lisp/magit-repos.el RET
 #+end_example
 
 Restart Emacs to return to the installed version.
+
+* Proposing a topic upstream (2027)
+
+Upstream's issue trackers stay locked until early 2027, and
+=.github/CONTRIBUTING.md= rejects all LLM-generated code.  It does allow an
+LLM to investigate an issue, provided that is disclosed upfront and the
+findings are described in the contributor's own words.  So a proposal
+starts as a GitHub Discussion (features) or an issue (bugs, once trackers
+reopen), and a pull request carries code Gregory rewrote himself, even when
+a careful rewrite turns =(message "Hello, World")= into
+=(message "Hello, World")=.
+
+1. Branch from the topic's base, so that the two versions stay comparable:
+   #+begin_src bash
+   git switch -c pr/group-headers 7a05d472
+   #+end_src
+   =7a05d472= is the base of the 2026 topics.  For a topic rebased since,
+   use =$(git merge-base upstream/main repolist/<slug>)=.
+2. Rewrite each commit by hand, using the topic only as a reference.  While
+   both branches share a base, =git diff repolist/<slug> pr/<slug>= shows
+   exactly where the two versions differ.  These commits carry no
+   =Co-Authored-By= trailer.
+3. Move the branch onto current upstream, then build and test again:
+   #+begin_src bash
+   git fetch upstream
+   git rebase upstream/main
+   make lisp && make test
+   #+end_src
+   After the rebase, compare the two series with
+   =git range-diff 7a05d472..repolist/<slug> upstream/main..pr/<slug>=.
+4. Push =pr/<slug>= to =origin=, and open the pull request against =main= of
+   =magit/magit=.
+5. Write the description yourself; the policy rules out generated text.
+   Cover:
+   - the purpose, linking the Discussion or issue;
+   - how to reproduce the problem, and how the fix was verified;
+   - upfront, that an LLM (Claude) helped find the cause and drafted the
+     original fix, which you then rewrote; and
+   - your view that good code deserves credit, whatever its source.
+
+The maintainer may also want an entry in the current =docs/CHANGELOG.*=.
+Entries cite commits, so add one when asked.
