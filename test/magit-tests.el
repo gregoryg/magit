@@ -502,6 +502,45 @@ Recent commits\n[[:xdigit:]]\\{7,\\} master dummy\\'"
     (magit-git "add" "file")
     (should-not (magit-repolist-column-version nil))))
 
+(defun magit-test-repolist-insert-groups ()
+  "List three fake repositories in two groups in the current buffer.
+Like the mark, the group headings begin with \"*\"."
+  (magit-repolist-mode)
+  (setq tabulated-list-format [("Name" 10 t)])
+  (tabulated-list-init-header)
+  (setq-local tabulated-list-groups
+              '(("* One" ("/a/" ["a"]) ("/b/" ["b"]))
+                ("* Two" ("/c/" ["c"]))))
+  (tabulated-list-print))
+
+(defun magit-test-repolist-goto (id)
+  "Move to the line of the repository with ID."
+  (goto-char (point-min))
+  (while (and (not (equal (tabulated-list-get-id) id))
+              (zerop (forward-line))))
+  (should (equal (tabulated-list-get-id) id)))
+
+(ert-deftest magit-repolist--marked-repos:groups ()
+  (skip-unless (boundp 'tabulated-list-groups))
+  (with-temp-buffer
+    (magit-test-repolist-insert-groups)
+    (dolist (id '("/a/" "/c/"))
+      (magit-test-repolist-goto id)
+      (magit-repolist-mark))
+    (should (equal (sort (magit-repolist--marked-repos ?*) #'string<)
+                   '("/a/" "/c/")))
+    (should (equal (sort (magit-repolist--marked-repos)
+                         (lambda (a b) (string< (cdr a) (cdr b))))
+                   '((?* . "/a/") (?* . "/c/"))))))
+
+(ert-deftest magit-repolist--mapc:groups ()
+  (skip-unless (boundp 'tabulated-list-groups))
+  (with-temp-buffer
+    (magit-test-repolist-insert-groups)
+    (let (dirs)
+      (magit-repolist--mapc (lambda () (push default-directory dirs)) 'all)
+      (should (equal (nreverse dirs) '("/a/" "/b/" "/c/"))))))
+
 (ert-deftest magit-repolist-refresh:no-commits ()
   (magit-with-test-repository
     (let ((magit-repository-directories (list (cons default-directory 0))))

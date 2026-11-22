@@ -221,12 +221,13 @@ marked with that character."
     (save-excursion
       (goto-char (point-min))
       (while (not (eobp))
-        (setq c (char-after))
-        (unless (eq c ?\s)
-          (if char
-              (when (eq c char)
-                (push (tabulated-list-get-id) list))
-            (push (cons c (tabulated-list-get-id)) list)))
+        (when-let ((id (tabulated-list-get-id)))
+          (setq c (char-after))
+          (unless (eq c ?\s)
+            (if char
+                (when (eq c char)
+                  (push id list))
+              (push (cons c id) list))))
         (forward-line)))
     list))
 
@@ -242,7 +243,8 @@ If it contains \"%s\" then the directory is substituted for that."
     (save-excursion
       (goto-char (point-min))
       (while (not (eobp))
-        (push (tabulated-list-get-id) repos)
+        (when-let ((id (tabulated-list-get-id)))
+          (push id repos))
         (forward-line)))
     (setq repos (nreverse repos)))
   (let ((base default-directory)
