@@ -294,7 +294,8 @@ If it contains \"%s\" then the directory is substituted for that."
     (with-current-buffer
         (get-buffer-create
          (if dir
-             (let ((magit-uniquify-buffer-names nil))
+             (let ((default-directory dir)
+                   (magit-uniquify-buffer-names nil))
                (funcall magit-generate-buffer-name-function
                         'magit-repo-list-mode))
            "*Magit Repositories*"))
