@@ -61,32 +61,77 @@ accepted on the EXWM host the same day.
 - [X] Remove =gjg/magit-repolist--target-repos= (Gregory, 2026-11-22,
   together with =gjg/magit-repolist-fetch=)
 
-* TODO Keep marks across redraws, and add =U= to unmark all [1/5]
+* DONE Keep marks across redraws, and add =U= to unmark all [5/5]
 Branch =repolist/marks= from =upstream/main=; replaces the planned
 =repolist/unmark-all=.  Every redraw erases marks: =g=, sorting, and the
 refresh after each repository's fetch, so a failed bulk fetch cannot be
-re-run on the same marks (Gregory, 2026-11-21; reproduced in batch).  Do
-this before fetch.  Design in PLANNING, "Marks do not survive a redraw".
+re-run on the same marks (Gregory, 2026-11-21; reproduced in batch).
+Design in PLANNING, "Marks do not survive a redraw".  Implemented
+2026-11-22: the three new tests fail before the fix, =make lisp= clean,
+=make test= 40/40, and a simulated =gjg= merge with both earlier topics is
+conflict-free, passes all 10 repository-list tests, and keeps marks with
+groups.  =U= reprints the list instead of calling
+=tabulated-list-clear-all-tags=.  Awaiting two commits, then a =gjg=
+rebuild.
 - [X] Check =tabulated-list-clear-all-tags= exists in Emacs 28.1 (since
   27.1; signals an error while the padding is 0)
-- [ ] Store marks per repository and reapply them in a
-  =tabulated-list-printer=
-- [ ] ERT: marks survive =revert-buffer= and sorting; =u= and =U= clear them
-- [ ] Bind =U= and mention it in the manual's repository-list node
-- [ ] Manual, EXWM host: mark, =g=, sort, fetch, =U=, with groups
+- [X] Store marks per repository and reapply them in a
+  =tabulated-list-printer= (=magit-repolist--print-entry=)
+- [X] ERT: marks survive =revert-buffer=, sorting, and fetch; =u= and =U=
+  clear them (=magit-repolist-mark:redraw=, =magit-repolist-mark:fetch=,
+  =magit-repolist-unmark-all=)
+- [X] Bind =U= and mention it in the manual's repository-list node
+  (=docs/magit.org=; =docs/magit.texi= regenerated, only that entry changed)
+- [X] Manual, EXWM host: mark, =g=, sort, fetch, =U=, with groups
 
-* TODO Make fetch non-blocking, fail fast, and report failures [1/8]
-Branch =repolist/async-fetch=, stacked on =repolist/group-headers=.
-- [ ] Settle approach A or B (PLANNING: "Fetch design")
-- [ ] Verify the prompt-detection hook point and TRAMP behavior
-- [ ] Implement sequential asynchronous fetch with per-row refresh
-- [ ] Show per-repository outcome and a final summary
-- [ ] ERT for the state machine with stubbed processes
-- [ ] Manual, EXWM host: a repository whose key is not in the agent fails
-  fast while Emacs stays responsive
-- [ ] Manual, EXWM host: TRAMP repositories on perihelion
+* DONE Make fetch non-blocking, fail fast, and report failures [8/8]
+Branch =repolist/async-fetch=, stacked on =repolist/group-headers=.  Design
+in PLANNING, "Fetch design".  Implemented 2026-11-22: =make lisp= clean,
+=make test= 41/41, and a simulated =gjg= merge with all three other topics
+is conflict-free in code, tests, and both manuals, and passes all 12
+repository-list tests.  Awaiting one commit, then a =gjg= rebuild.
+In =gjg=, =magit-repolist-mark:fetch= from =repolist/marks= now passes only
+because fetching is asynchronous; when ordering topics for upstream, rework
+that test for the new meaning of marks after a fetch.
+The first manual check on the EXWM host found a hang: an ssh passphrase
+prompt reached the filter in pieces, which matching each piece of output
+misses, so the fetch waited forever with prompting disabled.  Fixed
+2026-11-22 by matching the last line of output instead; the prompt fixture
+now prints in two pieces, which hangs the committed code until the test's
+deadline.  Committed as a fixup and accepted on the EXWM host.  That check
+also showed every failure logging an empty =Git error= line, and
+=magit-process-raise-error= would stop the queue at the first failure;
+fixed by binding both off around =magit-process-finish=
+(=magit-repolist-fetch:quiet=).  Awaiting a fixup commit, then a =gjg=
+rebuild.
+- [X] Settle approach A or B, and answer the open design questions (B;
+  Gregory, 2026-11-22)
+- [X] Verify the prompt-detection hook point: it needs its own process
+  filter, since Magit's filter prompts before running
+  =magit-process-prompt-functions=; TRAMP is left to the manual check below
+- [X] Implement sequential asynchronous fetch with per-row refresh
+- [X] Show per-repository outcome and a final summary, and mark exactly the
+  failed repositories; =f= during a fetch offers to cancel it
+- [X] ERT with real Git processes rather than stubs: a good, a failing, and
+  a prompting remote, and cancelling (=magit-repolist-fetch:async=,
+  =magit-repolist-fetch:cancel=)
+- [X] Manual, EXWM host: a repository whose key is not in the agent fails
+  fast while Emacs stays responsive (Gregory, 2026-11-22: all keys unloaded,
+  four repositories failed at their passphrase prompts and stayed marked)
+- [X] Manual, EXWM host: TRAMP repositories on perihelion
 - [X] Remove =gjg/magit-repolist-fetch= and its =f= binding (Gregory,
   2026-11-22; =f= is upstream's synchronous fetch until this task lands)
+
+* TODO Test outside EXWM [0/3]
+Gregory's request, 2026-11-22.  Everything so far was accepted under EXWM
+only.  Check each environment with =m=, =g=, sorting, =U=, and =f=,
+including a repository whose key is not loaded.
+- [ ] GUI Emacs on Linux without EXWM: ssh should prompt on the pty,
+  where the filter catches it, and open no askpass window
+- [ ] Terminal Emacs (=emacs -nw=), where Emacs has a controlling terminal
+- [ ] Windows, where Emacs has no ptys: ssh gets no terminal, so it may
+  fail at once or open Git for Windows' askpass window, which is usable
+  because Emacs no longer waits
 
 * TODO Fix group heading highlight in config [0/4]
 Config only (=~/emacs-gregoryg/README.org=, "Filter groups for Magit

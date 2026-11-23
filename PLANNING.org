@@ -187,11 +187,58 @@ Candidate approaches:
   the process and record "needs credentials".  Respects SSH configuration,
   reuses Magit's own prompt detection, and covers HTTPS prompts too.
 
-Leaning towards B; verify Magit's prompt hook point and TRAMP behavior before
-building.  Also open: whether results appear as a dedicated column, a flag,
-or a face on the row.  One option is to give each failed repository a mark
-of its own, so that re-running the failures is an ordinary marked fetch;
-that relies on =repolist/marks=.
+Recommended: B.  Findings from =lisp/magit-process.el= and batch probes on
+2026-11-22:
+
+- =magit-process-filter= calls Magit's password, username, and yes-or-no
+  handlers itself, before =magit-process-prompt-functions=, so that hook
+  cannot intercept a prompt.  A bulk fetch must install its own filter on
+  the process returned by =magit-start-git= (the docstring of
+  =magit-start-process= allows replacing filter and sentinel) and pass all
+  other output on to =magit-process-filter=.
+- With a pty, Magit's local default, a passphrase prompt from a real
+  =git fetch= reached such a filter, which killed the process at once.
+  Tested with OpenSSH's own prompt, using =ssh-keygen -y= as
+  =core.sshCommand=.
+- Magit's existing regexps recognize the four prompts a fetch is likely to
+  meet: SSH passphrase, HTTPS username, HTTPS password, and ssh's host-key
+  question.  The outcome can name which one stopped a repository.
+- =magit-process-sentinel= refreshes the buffer that started the process,
+  which reverts the whole list, so bulk fetch needs its own sentinel too.
+- TRAMP is unverified, because perihelion cannot ssh to itself.  Magit uses
+  pipes for remote processes; either the remote ssh's prompt reaches the
+  filter, or ssh finds no terminal and fails at once.  Both fail fast; check
+  from the EXWM host.
+- Cause of the freeze, confirmed on the EXWM host 2026-11-22: Emacs has no
+  controlling terminal, =DISPLAY= is =:0=, =SSH_ASKPASS= is empty, and
+  =/usr/bin/ssh-askpass= is installed.  The synchronous =process-file= gives
+  ssh no terminal, so ssh runs the default askpass program, whose X window
+  EXWM cannot manage while Emacs waits for ssh.  With a pty, ssh prompts on
+  the pty instead, which the bulk-fetch filter catches.
+
+Proposed design:
+
+- =f= keeps its selection (marked repositories, or all after confirmation)
+  but fetches one repository at a time, asynchronously, starting the next
+  one from the sentinel.
+- Each fetch runs =remote update= through =magit-start-git=, as now, with a
+  filter that kills the process on any prompt, and a sentinel that records
+  the outcome, lets =magit-process-finish= log it in the process buffer,
+  updates that repository's row, and starts the next fetch.
+- Updating a row reformats its entry and reprints that line, keeping its
+  mark, so this topic does not depend on =repolist/marks=.
+- The echo area shows progress; at the end, a summary names each failed
+  repository and why it failed.
+
+Decided by Gregory, 2026-11-22: approach B, and
+
+- after a run, exactly the repositories that failed are marked, so that
+  =f= again retries only those; a cancelled run leaves the unfetched ones
+  marked too;
+- =f= during a running fetch offers to cancel it.  This may be
+  controversial upstream, but suits daily use; and
+- fetching is sequential, because one fetch at a time is easier to watch
+  and test.  Revisit concurrency after experience with it.
 
 * Grouping upstream (open)
 
