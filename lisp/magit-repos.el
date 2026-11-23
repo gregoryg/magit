@@ -364,7 +364,11 @@ output of a prompt may arrive in several pieces."
   (unless (process-live-p process)
     (when (eq process magit-this-process)
       (setq magit-this-process nil))
-    (let ((inhibit-message t))
+    ;; Log the outcome in the process buffer only.  The summary
+    ;; reports failures, and signaling one would stop the queue.
+    (let ((inhibit-message t)
+          (message-log-max nil)
+          (magit-process-raise-error nil))
       (magit-process-finish process))
     (let ((buffer (process-get process 'magit-repolist-buffer))
           (repo (process-get process 'magit-repolist-repo)))

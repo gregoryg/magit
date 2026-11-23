@@ -598,6 +598,21 @@ only hangs."
       ;; Only failures remain marked, so fetching again retries them.
       (should (equal (magit-test-repolist-fetch-marked) '("bad" "prompt"))))))
 
+(ert-deftest magit-repolist-fetch:quiet ()
+  (magit-test-with-fetch-repolist
+    (let ((magit-process-raise-error t)
+          (ids (seq-filter (##string-match-p "/\\(bad\\|good\\)/\\'" %)
+                           (mapcar #'car tabulated-list-entries))))
+      (with-current-buffer (messages-buffer)
+        (let ((inhibit-read-only t))
+          (erase-buffer)))
+      (magit-repolist-fetch ids)
+      (magit-test-repolist-fetch-wait)
+      ;; A failure neither stops the queue nor logs its own error.
+      (should (equal (magit-test-repolist-fetch-marked) '("bad")))
+      (should-not (with-current-buffer (messages-buffer)
+                    (string-search "Git error" (buffer-string)))))))
+
 (ert-deftest magit-repolist-fetch:cancel ()
   (magit-test-with-fetch-repolist
     (let ((ids (seq-filter (##string-match-p "/\\(good\\|slow\\)/\\'" %)
