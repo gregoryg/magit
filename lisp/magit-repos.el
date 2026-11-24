@@ -227,7 +227,8 @@ This is used as `tabulated-list-printer'."
       (tabulated-list-put-tag mark))))
 
 (defun magit-repolist-fetch (repos)
-  "Fetch all marked or listed repositories.
+  "Fetch the marked repositories, or the repository at point.
+See `magit-repolist--get-repos' for how repositories are selected.
 
 Fetch asynchronously, one repository at a time, and update each
 repository's line once its fetch is done.  If Git or SSH asks for a
@@ -251,7 +252,8 @@ repositories that were not fetched then remain marked."
           (if (eq repos 'all) (magit-repolist--displayed-repos) repos)))))
 
 (defun magit-repolist-find-file-other-frame (repos file)
-  "Find a file in all marked or listed repositories."
+  "Find a file in the marked repositories, or the repository at point.
+See `magit-repolist--get-repos' for how repositories are selected."
   (interactive (list (magit-repolist--get-repos ?*)
                      (read-string "Find file in repositories: ")))
   (magit-repolist--mapc (##find-file-other-frame file) repos))
@@ -271,11 +273,15 @@ same line if there is no entry at point, such as a group heading."
         (forward-line (1- line))))))
 
 (defun magit-repolist--get-repos (&optional char)
-  "Return marked repositories or `all' if none are marked.
-If optional CHAR is non-nil, then only return repositories
-marked with that character.  If no repositories are marked
-then ask whether to act on all repositories instead."
+  "Return the repositories to act on.
+Return the marked repositories, if any.  Otherwise return a list of
+the repository at point.  If there is no repository at point either,
+for example at the end of the buffer, then ask whether to act on all
+displayed repositories, and if so, return `all'.  If optional CHAR is
+non-nil, then only consider repositories marked with that character."
   (or (magit-repolist--marked-repos char)
+      (and-let* ((id (tabulated-list-get-id)))
+        (list id))
       (if (magit-confirm 'repolist-all
             "Nothing selected.  Act on ALL displayed repositories")
           'all

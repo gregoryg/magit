@@ -3222,7 +3222,9 @@ This command unmarks all repositories.
 @kindex f
 @findex magit-repolist-fetch
 This command fetches all marked repositories.  If no repositories
-are marked, then it offers to fetch all displayed repositories.
+are marked, then it fetches the repository at point.  If there is
+no repository at point either, then it offers to fetch all displayed
+repositories.
 
 Repositories are fetched asynchronously, one at a time, and each
 line is updated once its repository has been fetched.  If Git or
@@ -3237,8 +3239,9 @@ a fetch is running, this command offers to cancel it instead.
 @findex magit-repolist-find-file-other-frame
 This command reads a relative file-name (without completion) and
 opens the respective file in each marked repository in a new frame.
-If no repositories are marked, then it offers to do this for all
-displayed repositories.
+If no repositories are marked, then it does this for the repository
+at point.  If there is no repository at point either, then it offers
+to do this for all displayed repositories.
 @end table
 
 @node Logging
