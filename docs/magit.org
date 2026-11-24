@@ -2782,6 +2782,14 @@ The following commands are available in repolist buffers:
   This command fetches all marked repositories.  If no repositories
   are marked, then it offers to fetch all displayed repositories.
 
+  Repositories are fetched asynchronously, one at a time, and each
+  line is updated once its repository has been fetched.  If Git or
+  SSH asks for a passphrase, password, username or confirmation, then
+  fetching that repository is stopped instead.  When all fetches are
+  done, exactly the repositories for which fetching failed are marked,
+  so that using this command again only retries those.  Invoked while
+  a fetch is running, this command offers to cancel it instead.
+
 - Key: 5 (magit-repolist-find-file-other-frame) ::
 
   This command reads a relative file-name (without completion) and

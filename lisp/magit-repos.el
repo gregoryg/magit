@@ -212,11 +212,28 @@ This is used as `tabulated-list-printer'."
       (tabulated-list-put-tag mark))))
 
 (defun magit-repolist-fetch (repos)
-  "Fetch all marked or listed repositories."
-  (interactive (list (magit-repolist--get-repos ?*)))
-  (run-hooks 'magit-credential-hook)
-  (magit-repolist--mapc (##magit-run-git "remote" "update")
-                        repos "Fetching in %s..."))
+  "Fetch all marked or listed repositories.
+
+Fetch asynchronously, one repository at a time, and update each
+repository's line once its fetch is done.  If Git or SSH asks for a
+passphrase, password, username or confirmation, stop that fetch
+instead of asking.  When all fetches are done, mark exactly those
+repositories for which fetching failed, so that calling this command
+again retries only those.
+
+If a fetch is already running, offer to cancel it instead.  The
+repositories that were not fetched then remain marked."
+  (interactive
+   (list (and (not (magit-repolist--fetch-running-p))
+              (magit-repolist--get-repos ?*))))
+  (cond ((magit-repolist--fetch-running-p)
+         (when (magit-confirm 'repolist-cancel-fetch
+                 "A fetch is running.  Cancel it")
+           (magit-repolist--fetch-cancel)))
+        (repos
+         (run-hooks 'magit-credential-hook)
+         (magit-repolist--fetch-start
+          (if (eq repos 'all) (magit-repolist--displayed-repos) repos)))))
 
 (defun magit-repolist-find-file-other-frame (repos file)
   "Find a file in all marked or listed repositories."
@@ -268,14 +285,7 @@ the top-level directory of the current repository.  If optional
 MSG is non-nil then that is displayed around each call to FN.
 If it contains \"%s\" then the directory is substituted for that."
   (when (eq repos 'all)
-    (setq repos nil)
-    (save-excursion
-      (goto-char (point-min))
-      (while (not (eobp))
-        (when-let ((id (tabulated-list-get-id)))
-          (push id repos))
-        (forward-line)))
-    (setq repos (nreverse repos)))
+    (setq repos (magit-repolist--displayed-repos)))
   (let ((base default-directory)
         (len (length repos))
         (i 0))
@@ -289,6 +299,183 @@ If it contains \"%s\" then the directory is substituted for that."
               (funcall fn)
               (message (concat msg "done")))
           (funcall fn))))))
+
+(defun magit-repolist--displayed-repos ()
+  "Return the ids of all displayed repositories, in display order."
+  (let (repos)
+    (save-excursion
+      (goto-char (point-min))
+      (while (not (eobp))
+        (when-let ((id (tabulated-list-get-id)))
+          (push id repos))
+        (forward-line)))
+    (nreverse repos)))
+
+;;;; Fetch
+
+(defvar-local magit-repolist--fetch-queue nil
+  "Repositories that remain to be fetched.")
+
+(defvar-local magit-repolist--fetch-process nil
+  "The process of the running fetch, if any.")
+
+(defvar-local magit-repolist--fetch-total 0
+  "The number of repositories in the running fetch.")
+
+(defvar-local magit-repolist--fetch-failed nil
+  "Alist of repositories for which fetching failed and why.")
+
+(defun magit-repolist--fetch-running-p ()
+  "Return non-nil if a fetch is running in the current buffer."
+  (process-live-p magit-repolist--fetch-process))
+
+(defun magit-repolist--fetch-start (repos)
+  "Start fetching REPOS, one at a time."
+  (setq magit-repolist--fetch-queue repos)
+  (setq magit-repolist--fetch-total (length repos))
+  (setq magit-repolist--fetch-failed nil)
+  (magit-repolist--fetch-next))
+
+(defun magit-repolist--fetch-next ()
+  "Start fetching the next repository, or finish if there is none."
+  (if-let ((repo (pop magit-repolist--fetch-queue)))
+      (let* ((buffer (current-buffer))
+             (default-directory (file-name-as-directory repo))
+             (process (magit-start-git nil "remote" "update")))
+        (process-put process 'magit-repolist-buffer buffer)
+        (process-put process 'magit-repolist-repo repo)
+        (set-process-filter process #'magit-repolist--fetch-filter)
+        (set-process-sentinel process #'magit-repolist--fetch-sentinel)
+        (setq magit-repolist--fetch-process process)
+        (message "(%s/%s) Fetching in %s..."
+                 (- magit-repolist--fetch-total
+                    (length magit-repolist--fetch-queue))
+                 magit-repolist--fetch-total
+                 (abbreviate-file-name repo)))
+    (setq magit-repolist--fetch-process nil)
+    (magit-repolist--fetch-finish)))
+
+(defun magit-repolist--fetch-filter (process string)
+  "Insert STRING into PROCESS's buffer, but stop PROCESS if it prompts.
+Recognize prompts using the same options as `magit-process-filter',
+and record the prompt as the reason why fetching failed.  Look for a
+prompt in the last line of output, not just in STRING, because the
+output of a prompt may arrive in several pieces."
+  (let ((magit-process-yes-or-no-prompt-regexp regexp-unmatchable)
+        (magit-process-username-prompt-regexps nil)
+        (magit-process-password-prompt-regexps nil)
+        (magit-process-prompt-functions nil))
+    (magit-process-filter process string))
+  (when-let ((prompt (magit-repolist--fetch-prompt
+                      (with-current-buffer (process-buffer process)
+                        (let ((end (process-mark process)))
+                          (buffer-substring-no-properties
+                           (save-excursion (goto-char end) (pos-bol))
+                           end))))))
+    (process-put process 'magit-repolist-reason prompt)
+    (kill-process process)))
+
+(defun magit-repolist--fetch-prompt (string)
+  "Return the prompt in STRING, if any, without trailing whitespace."
+  (and-let* ((prompt
+              (or (magit-process-match-prompt
+                   magit-process-password-prompt-regexps string)
+                  (magit-process-match-prompt
+                   magit-process-username-prompt-regexps string)
+                  (and-let* ((beg (string-match
+                                   magit-process-yes-or-no-prompt-regexp
+                                   string)))
+                    (substring string 0 beg)))))
+    (string-trim prompt)))
+
+(defun magit-repolist--fetch-sentinel (process _event)
+  "Record the outcome of fetching with PROCESS and fetch the next repository."
+  (unless (process-live-p process)
+    (when (eq process magit-this-process)
+      (setq magit-this-process nil))
+    ;; Log the outcome in the process buffer only.  The summary
+    ;; reports failures, and signaling one would stop the queue.
+    (let ((inhibit-message t)
+          (message-log-max nil)
+          (magit-process-raise-error nil))
+      (magit-process-finish process))
+    (let ((buffer (process-get process 'magit-repolist-buffer))
+          (repo (process-get process 'magit-repolist-repo)))
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer
+          (unless (and (eq (process-status process) 'exit)
+                       (zerop (process-exit-status process)))
+            (push (cons repo
+                        (or (process-get process 'magit-repolist-reason)
+                            (magit-process-error-summary
+                             (process-buffer process)
+                             (process-get process 'section))
+                            (format "exit status %s"
+                                    (process-exit-status process))))
+                  magit-repolist--fetch-failed))
+          (magit-repolist--update-entry repo)
+          (when (eq process magit-repolist--fetch-process)
+            (magit-repolist--fetch-next)))))))
+
+(defun magit-repolist--fetch-cancel ()
+  "Cancel the running fetch.
+The repositories that were not fetched count as failed."
+  (dolist (repo magit-repolist--fetch-queue)
+    (push (cons repo "not fetched") magit-repolist--fetch-failed))
+  (setq magit-repolist--fetch-queue nil)
+  (when-let ((process magit-repolist--fetch-process))
+    (process-put process 'magit-repolist-reason "cancelled")
+    (kill-process process)))
+
+(defun magit-repolist--fetch-finish ()
+  "Mark the repositories for which fetching failed and report the outcome."
+  (let ((failed (reverse magit-repolist--fetch-failed))
+        (total magit-repolist--fetch-total))
+    (when failed
+      (magit-repolist--ensure-padding))
+    (save-excursion
+      (goto-char (point-min))
+      (while (not (eobp))
+        (let ((id (tabulated-list-get-id)))
+          (cond ((not id) (forward-line))
+                ((assoc id failed) (magit-repolist-mark))
+                ((> tabulated-list-padding 0) (magit-repolist-unmark))
+                ((forward-line))))))
+    (if failed
+        (message "Fetched %s of %s repositories; failed (and marked):\n%s"
+                 (- total (length failed)) total
+                 (mapconcat (pcase-lambda (`(,repo . ,reason))
+                              (format "  %s: %s"
+                                      (file-name-nondirectory
+                                       (directory-file-name repo))
+                                      reason))
+                            failed "\n"))
+      (message "Fetched %s repositories" total))))
+
+(defun magit-repolist--update-entry (id)
+  "Recompute the columns of the repository ID and print its line again."
+  (when-let ((entry (assoc id tabulated-list-entries)))
+    (let* ((name (car (rassoc id (magit-list-repos-uniquify
+                                  (mapcar (##cons (file-name-nondirectory
+                                                   (directory-file-name %))
+                                                  %)
+                                          (mapcar #'car
+                                                  tabulated-list-entries))))))
+           (new (magit-repolist--format-entry (cons name id))))
+      (setcar (cdr entry) (cadr new))
+      (save-excursion
+        (goto-char (point-min))
+        (while (and (not (equal (tabulated-list-get-id) id))
+                    (zerop (forward-line))))
+        (when (equal (tabulated-list-get-id) id)
+          (let ((inhibit-read-only t)
+                (tag (buffer-substring (point)
+                                       (+ (point) tabulated-list-padding))))
+            (delete-region (point) (progn (forward-line) (point)))
+            (apply tabulated-list-printer entry)
+            (when (> tabulated-list-padding 0)
+              (forward-line -1)
+              (tabulated-list-put-tag tag))))))))
 
 ;;;; Mode
 
