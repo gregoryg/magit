@@ -287,8 +287,7 @@ If it contains \"%s\" then the directory is substituted for that."
     (user-error "You need to customize `magit-repository-directories' %s"
                 "before you can list repositories"))
   (let ((dir (and (not force-global)
-                  (buffer-local-boundp 'magit-repository-directories
-                                       (current-buffer))
+                  (local-variable-p 'magit-repository-directories)
                   (or (locate-dominating-file default-directory
                                               #'dir-locals--all-files)
                       default-directory))))
