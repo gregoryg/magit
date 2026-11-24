@@ -159,7 +159,7 @@ and the face survive =g= with groups.
 - [X] Set =tabulated-list-padding= to 2 in the hook so marking never reprints
 - [X] Manual: highlight survives open, mark, sort and refresh
 
-* STARTED Mark or unmark a whole group from its heading [4/5]
+* DONE Mark or unmark a whole group from its heading [5/5]
 Branch =repolist/mark-group=, stacked on =repolist/marks=, whose mark
 storage and =magit-repolist--set-mark= it changes.  It finds a group's rows
 itself, so it needs no code from =repolist/group-headers=.  As in ibuffer
@@ -183,9 +183,9 @@ commit, then a =gjg= rebuild.
   (=magit-repolist-mark:group-entry=, plus the existing mark tests)
 - [X] Mention it in the manual's repository-list node (=docs/magit.org=;
   =docs/magit.texi= regenerated, only those entries changed)
-- [ ] Manual, EXWM host: mark a group, =g=, sort, =f=, unmark it
+- [X] Manual, EXWM host: mark a group, =g=, sort, =f=, unmark it
 
-* TODO Act on the repository at point when nothing is marked [0/5]
+* DONE Act on the repository at point when nothing is marked [5/5]
 Branch =repolist/act-at-point= from =upstream/main=.  Reverses part of
 =f0296148= (2022), where no marks means "ask, then act on all".  The
 argument for upstream is Magit's own rule: status-buffer commands act on
@@ -196,12 +196,23 @@ point; else (a heading or the end of the buffer) the existing
 Discussion from grouping, so a rejection does not sink both (Gregory,
 2026-11-24).  Gregory would prefer =f= never to ask about all, perhaps
 with =F= fetching all; a config matter, not part of the proposal.
-- [ ] Return the repository at point when nothing is marked
-- [ ] ERT: marked, at point, and on a heading or the last line (asks)
-- [ ] Update the docstrings of commands that say "marked or listed"
-- [ ] Update the manual's repository-list node
-- [ ] Manual, EXWM host: =f=, =5= and find-file at point, on a heading,
-  and with marks
+Implemented 2026-11-24: the test fails before the change, =make lisp=
+clean, =make test= 38/38.  A simulated =gjg= merge conflicts twice, as
+expected: in =magit-repolist-fetch=, keep the asynchronous body from
+=gjg= and take this topic's two-line docstring opening; in the tests, keep
+both sides, =gjg='s first.  Resolved that way it passes 52/52.  The
+manual's =f= entry merges cleanly.  Merged into =gjg= as =68cfc3a7= with
+that resolution, which =rerere= has recorded; 52/52 on perihelion and the
+EXWM host, and accepted there the same day.
+- [X] Return the repository at point when nothing is marked
+- [X] ERT: marked, at point, and the last line, which asks
+  (=magit-repolist--get-repos:at-point=; a heading is the same case, a
+  line without an id, so the test needs no groups)
+- [X] Update the docstrings of commands that say "marked or listed"
+- [X] Update the manual's repository-list node (=docs/magit.org=;
+  =docs/magit.texi= regenerated, only the =f= and =5= entries changed)
+- [X] Manual, EXWM host: =f= and =5= at point, on a heading, and with
+  marks (Gregory, 2026-11-24)
 
 * TODO Document undocumented confirmation keys in =magit-no-confirm= [0/3]
 =magit-confirm= keys missing from =magit--confirm-actions= and the

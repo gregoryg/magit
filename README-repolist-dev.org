@@ -45,6 +45,7 @@ Current topics, in merge order:
 4. =repolist/async-fetch= (stacked on =repolist/group-headers=)
 5. =repolist/buffer-naming= (stacked on =repolist/local-variable-p=)
 6. =repolist/mark-group= (stacked on =repolist/marks=)
+7. =repolist/act-at-point=
 
 ** One-time setup
 
@@ -101,7 +102,8 @@ to resolve.
           repolist/marks
           repolist/async-fetch
           repolist/buffer-naming
-          repolist/mark-group)
+          repolist/mark-group
+          repolist/act-at-point)
   if ! git diff --quiet || ! git diff --cached --quiet; then
     echo "Uncommitted tracked changes; aborting." >&2
     exit 1
