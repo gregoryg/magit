@@ -171,16 +171,45 @@ With a prefix argument, always display the global list."
       (magit-status-setup-buffer (expand-file-name id))
     (user-error "There is no repository at point")))
 
+(defvar-local magit-repolist--marks nil
+  "Hash table mapping the ids of marked repositories to their marks.
+Used by `magit-repolist--print-entry' to restore marks after the
+list is printed again.")
+
 (defun magit-repolist-mark ()
   "Mark a repository and move to the next line."
   (interactive)
   (magit-repolist--ensure-padding)
-  (tabulated-list-put-tag "*" t))
+  (magit-repolist--set-mark "*"))
 
 (defun magit-repolist-unmark ()
   "Unmark a repository and move to the next line."
   (interactive)
-  (tabulated-list-put-tag " " t))
+  (magit-repolist--set-mark nil))
+
+(defun magit-repolist-unmark-all ()
+  "Unmark all repositories."
+  (interactive)
+  (clrhash magit-repolist--marks)
+  (tabulated-list-print t))
+
+(defun magit-repolist--set-mark (mark)
+  "Set the mark of the repository at point to MARK and move to the next line.
+If MARK is nil, then remove the mark."
+  (when-let ((id (tabulated-list-get-id)))
+    (if mark
+        (puthash id mark magit-repolist--marks)
+      (remhash id magit-repolist--marks)))
+  (tabulated-list-put-tag (or mark " ") t))
+
+(defun magit-repolist--print-entry (id cols)
+  "Insert a repository entry, including its mark if any.
+This is used as `tabulated-list-printer'."
+  (tabulated-list-print-entry id cols)
+  (when-let ((mark (gethash id magit-repolist--marks)))
+    (save-excursion
+      (forward-line -1)
+      (tabulated-list-put-tag mark))))
 
 (defun magit-repolist-fetch (repos)
   "Fetch all marked or listed repositories."
@@ -269,6 +298,7 @@ If it contains \"%s\" then the directory is substituted for that."
   "C-m" #'magit-repolist-status
   "m"   #'magit-repolist-mark
   "u"   #'magit-repolist-unmark
+  "U"   #'magit-repolist-unmark-all
   "f"   #'magit-repolist-fetch
   "5"   #'magit-repolist-find-file-other-frame
   "<remap> <dired-jump>" #'magit-dired-jump)
@@ -279,6 +309,8 @@ If it contains \"%s\" then the directory is substituted for that."
   :group 'magit-repolist
   (setq-local x-stretch-cursor nil)
   (setq tabulated-list-padding 0)
+  (setq tabulated-list-printer #'magit-repolist--print-entry)
+  (setq magit-repolist--marks (make-hash-table :test #'equal))
   (setq-local tabulated-list-revert-hook (list #'magit-repolist-refresh t))
   (setq imenu-prev-index-position-function
         #'magit-repolist--imenu-prev-index-position)

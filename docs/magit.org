@@ -2773,6 +2773,10 @@ The following commands are available in repolist buffers:
 
   This command unmarks the repository at point.
 
+- Key: U (magit-repolist-unmark-all) ::
+
+  This command unmarks all repositories.
+
 - Key: f (magit-repolist-fetch) ::
 
   This command fetches all marked repositories.  If no repositories

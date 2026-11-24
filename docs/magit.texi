@@ -3211,6 +3211,11 @@ This command marks the repository at point.
 @findex magit-repolist-unmark
 This command unmarks the repository at point.
 
+@item @kbd{U} (@code{magit-repolist-unmark-all})
+@kindex U
+@findex magit-repolist-unmark-all
+This command unmarks all repositories.
+
 @item @kbd{f} (@code{magit-repolist-fetch})
 @kindex f
 @findex magit-repolist-fetch
