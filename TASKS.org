@@ -38,13 +38,22 @@ the EXWM host 2026-11-21 by loading the file over TRAMP.
 - [X] Manual, EXWM host: global list from =*scratch*= and from a repository
 - [X] Remove the =gjg/magit-repolist-force-global= advice
 
-* TODO Name per-directory list buffers after their list directory [0/2]
-Separate topic, not yet branched.  =magit-repolist-setup= names the buffer
-from the invoking buffer's =default-directory=, not from the directory
-holding =.dir-locals.el=, so invoking from two subdirectories opens two
-buffers showing the same list.
-- [ ] Bind =default-directory= to the list directory when generating the name
-- [ ] ERT: invoking from two subdirectories reuses one buffer
+* DONE Name per-directory list buffers after their list directory [4/4]
+Branch =repolist/buffer-naming=, stacked on =repolist/local-variable-p=, so
+its test can sit beside that topic's tests and reuse its setup helper.
+=magit-repolist-setup= named the buffer from the invoking buffer's
+=default-directory=, not from the directory holding =.dir-locals.el=, so
+invoking from two subdirectories opened two buffers showing the same list.
+Implemented 2026-11-22: the test fails before the fix, =make lisp= clean,
+=make test= 40/40, and a simulated =gjg= merge is conflict-free and passes
+48/48.  Awaiting one commit, then a =gjg= rebuild.
+- [X] Bind =default-directory= to the list directory when generating the name
+- [X] ERT: invoking from two subdirectories reuses one buffer
+  (=magit-repolist-setup:subdirectories=)
+- [X] Add the topic to the rebuild script's list (done in the developer
+  guide; copy it to wherever the script is saved)
+- [X] Manual, EXWM host: =magit-list-repositories= from two subdirectories
+  of a project with =.dir-locals.el= shows one buffer
 
 * DONE Skip group header lines when collecting repositories [4/4]
 Branch =repolist/group-headers=, committed as =86376522=.
@@ -133,18 +142,105 @@ including a repository whose key is not loaded.
   fail at once or open Git for Windows' askpass window, which is usable
   because Emacs no longer waits
 
-* TODO Fix group heading highlight in config [0/4]
+* DONE Fix group heading highlight in config [4/4]
 Config only (=~/emacs-gregoryg/README.org=, "Filter groups for Magit
-repolist"), unless grouping goes upstream.
-- [ ] Give group names a face with =propertize=; drop
-  =outline-minor-mode-highlight=
-- [ ] Set =outline-regexp= locally so marked rows are not headings
-- [ ] Set =tabulated-list-padding= to 2 in the hook so marking never reprints
-- [ ] Manual: highlight survives open, mark, sort and refresh
+repolist"), unless grouping goes upstream.  Drafted 2026-11-24 for Gregory
+to apply; applied and accepted on the EXWM host the same day.  Headings
+become ibuffer-style =[ Name ]= and are found by an =outline-level= text
+property through =outline-search-level=, as =describe-mode= does, so
+heading text no longer matters to outline and TAB folding stays.  Probed
+in batch against =gjg=: font-lock is off in the list, so a =face= property
+survives every reprint; marked rows are not headings; folding works; marks
+and the face survive =g= with groups.
+- [X] Give group names a face and an =outline-level= property with
+  =propertize=; drop =outline-minor-mode-highlight=
+- [X] Find headings with =outline-search-function= instead of a regexp, so
+  marked rows are not headings
+- [X] Set =tabulated-list-padding= to 2 in the hook so marking never reprints
+- [X] Manual: highlight survives open, mark, sort and refresh
+
+* STARTED Mark or unmark a whole group from its heading [4/5]
+Branch =repolist/mark-group=, stacked on =repolist/marks=, whose mark
+storage and =magit-repolist--set-mark= it changes.  It finds a group's rows
+itself, so it needs no code from =repolist/group-headers=.  As in ibuffer
+and dired, =m= and =u= on a heading act on every row up to the next
+heading, and no longer tag the heading line itself.  Propose together
+with filter groups (Gregory, 2026-11-24).
+Implemented 2026-11-24: the first mark of a session prints the list again
+to make room for marks, which moved point from a heading to the top, so
+=magit-repolist--ensure-padding= now keeps the line when there is no entry
+at point.  The two group tests fail before the change; =make lisp= clean,
+=make test= 43/43; a simulated =gjg= merge is conflict-free and passes
+51/51.  A batch probe with the config's property headings marks a folded
+group, keeps it folded, and keeps the heading's face.  Awaiting one
+commit, then a =gjg= rebuild.
+- [X] =m= and =u= on a line without a repository act on its group, then
+  move to the next heading
+- [X] ERT, Emacs 30+: =m= on a heading marks exactly its group and leaves
+  the heading text intact; =u= unmarks it (=magit-repolist-mark:group=,
+  =magit-repolist-mark:group-padding=)
+- [X] ERT: =m= and =u= on a repository row are unchanged
+  (=magit-repolist-mark:group-entry=, plus the existing mark tests)
+- [X] Mention it in the manual's repository-list node (=docs/magit.org=;
+  =docs/magit.texi= regenerated, only those entries changed)
+- [ ] Manual, EXWM host: mark a group, =g=, sort, =f=, unmark it
+
+* TODO Act on the repository at point when nothing is marked [0/5]
+Branch =repolist/act-at-point= from =upstream/main=.  Reverses part of
+=f0296148= (2022), where no marks means "ask, then act on all".  The
+argument for upstream is Magit's own rule: status-buffer commands act on
+the selection, else on the section at point.  New rule in
+=magit-repolist--get-repos=: marked repositories; else the repository at
+point; else (a heading or the end of the buffer) the existing
+=repolist-all= question, so =magit-no-confirm= still skips it.  Separate
+Discussion from grouping, so a rejection does not sink both (Gregory,
+2026-11-24).  Gregory would prefer =f= never to ask about all, perhaps
+with =F= fetching all; a config matter, not part of the proposal.
+- [ ] Return the repository at point when nothing is marked
+- [ ] ERT: marked, at point, and on a heading or the last line (asks)
+- [ ] Update the docstrings of commands that say "marked or listed"
+- [ ] Update the manual's repository-list node
+- [ ] Manual, EXWM host: =f=, =5= and find-file at point, on a heading,
+  and with marks
+
+* TODO Document undocumented confirmation keys in =magit-no-confirm= [0/3]
+=magit-confirm= keys missing from =magit--confirm-actions= and the
+=magit-no-confirm= docstring, so =customize= cannot offer them: upstream's
+=repolist-all=, =prune-stale-refspecs= and =purge-dangling-wiprefs=, plus
+this fork's =repolist-cancel-fetch=.  Found 2026-11-24 by comparing every
+literal =magit-confirm= key with the list.  The fork's own key belongs in
+=repolist/async-fetch=; upstream's three are a separate small topic.
+- [ ] =repolist/async-fetch=: add =repolist-cancel-fetch= to the list and
+  docstring
+- [ ] Separate topic from =upstream/main=: document the other three
+- [ ] Decide whether a cancel question needs =magit-confirm= at all, or
+  only =y-or-n-p=
+
+* TODO Keep point when the first mark makes room for marks [0/4]
+Upstream bug, found 2026-11-24 while building =repolist/mark-group=.  The
+first =m= of a list sets =tabulated-list-padding= from 0 to 2 in
+=magit-repolist--ensure-padding= and prints the list again.  That print
+restores point by entry id, so on a line without an entry point goes to
+the top of the buffer, and =m= then acts there.  Reproduced in batch
+against =upstream/main= with three repositories: =m= on the empty last
+line marks the first repository.  With =tabulated-list-groups=, =m= on any
+heading lands on the first heading instead.  =repolist/mark-group= already
+contains the fix, keeping the line when there is no entry at point, and
+=magit-repolist-mark:group-padding= covers it with groups.  For upstream it
+is a separate topic, proposed first; =repolist/mark-group= then drops that
+hunk.
+- [ ] Topic from =upstream/main=: keep the line when there is no entry at
+  point
+- [ ] ERT without groups: the first =m= on the last line marks nothing
+  (fails before the fix)
+- [ ] Rebase =repolist/mark-group= onto it, or drop the duplicate hunk when
+  the fix lands upstream
+- [ ] Manual, EXWM host: first =m= of a session at the end of the list
 
 * DEFERRED Make list refresh asynchronous
 Every column runs git per repository on each refresh; TRAMP makes this slow.
-Revisit after fetch, which will establish the asynchronous pattern.
+Fetch has established the asynchronous pattern; open questions about
+progress and completion are in PLANNING, "Asynchronous refresh (open)".
 
 * DEFERRED Propose filter groups upstream
 Needs a fallback for Emacs before 30.  Start as a GitHub Discussion.

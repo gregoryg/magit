@@ -4,15 +4,17 @@
 
 * Status
 
-Gregory runs MELPA Magit on the EXWM host, with workarounds in
-=~/emacs-gregoryg/README.org= (section "Magit").  This clone exists to fix
-=magit-list-repositories= for daily use and to keep each fix in a shape that
-could go upstream.
+This clone exists to fix =magit-list-repositories= for daily use and to
+keep each fix in a shape that could go upstream.  Since 2026-11-21 the EXWM
+host runs the =gjg= integration branch instead of MELPA Magit, and the
+workarounds in =~/emacs-gregoryg/README.org= (section "Magit") are gone.
 
-Since 2026-11-21 the EXWM host runs the =gjg= integration branch.  The
-first topic, =repolist/local-variable-p=, is committed and accepted;
-=repolist/group-headers= is implemented and awaiting its commit.  The other
-topics are planned.
+As of 2026-11-24, five topics are committed, merged into =gjg=, and accepted
+on the EXWM host: =repolist/local-variable-p=, =repolist/group-headers=,
+=repolist/marks=, =repolist/async-fetch=, and =repolist/buffer-naming=.
+Fetching no longer blocks Emacs, stops at credential prompts, and marks the
+repositories that failed.  Asynchronous refresh is the largest remaining
+daily cost; see "Asynchronous refresh (open)".
 
 Executable status lives in [[file:TASKS.org][TASKS.org]].  Setup and branch
 mechanics live in [[file:README-repolist-dev.org][README-repolist-dev.org]].
@@ -35,10 +37,13 @@ stays in Gregory's config.
 - *perihelion* :: Development host for this clone and for agent sessions.
   Emacs 32.0.50, git 2.47.3.  Also a TRAMP target in Gregory's repository
   list (=/ssh:perihelion:...=).
-- *EXWM host* :: Gregory's daily Emacs.  Loads Magit from MELPA; acceptance
-  testing happens here, because the hang and the UI problems only show there.
-- *Remotes* :: =origin= is the fork =gregoryg/magit=; =upstream= is
-  =magit/magit=.
+- *EXWM host* :: Gregory's daily Emacs.  Loads =gjg= from a clone whose
+  =origin= is perihelion; acceptance testing happens here, because the hang
+  and the UI problems only show there.
+- *Remotes* :: On perihelion, =origin= is the fork =gregoryg/magit= and
+  =upstream= is =magit/magit=.  The same name means different hosts on the
+  two machines, so the EXWM host's update command must not be run on
+  perihelion: on 2026-11-22 it reset =gjg= to a stale copy on GitHub.
 
 * 2026-11-21 — Upstream-shaped topics, private use first
 
@@ -164,7 +169,7 @@ Bulk fetch multiplies this: =magit-run-git= ends with =magit-refresh=, which
 reverts a tabulated list, so fetching N repositories refreshes the whole list
 N times (observed in batch, 2026-11-21).
 
-* Fetch design (open)
+* Fetch design (implemented 2026-11-22)
 
 Requirements:
 
@@ -239,6 +244,37 @@ Decided by Gregory, 2026-11-22: approach B, and
   controversial upstream, but suits daily use; and
 - fetching is sequential, because one fetch at a time is easier to watch
   and test.  Revisit concurrency after experience with it.
+
+Lessons from acceptance on the EXWM host:
+
+- A prompt's output can reach the filter in several pieces, or after a
+  carriage return, so the filter matches the last line of the process
+  buffer, not each piece.  Matching pieces hung the first manual test.
+- =magit-process-finish= logs every failure as =Git error=, and signals
+  one if =magit-process-raise-error= is set, which would stop the queue.
+  The sentinel binds both off; the summary reports failures instead.
+- Over TRAMP, a repository whose key is missing fails at once with Git's
+  own error, such as "Could not read from remote repository".  The remote
+  ssh never prompted, probably because Magit gives remote processes pipes
+  rather than a terminal; not investigated further.
+
+* Asynchronous refresh (open)
+
+Every column runs at least one git command per repository, synchronously,
+on every refresh, and TRAMP adds a round trip to each.  Fetch established
+the asynchronous pattern, but a refresh has questions a fetch did not
+(Gregory, 2026-11-22):
+
+- Progress: while it runs, the user must see that it runs and how far it
+  got, for example in the mode line, not only in transient messages.
+- Completion: the end must be unmistakable, and rows not yet refreshed
+  must be distinguishable from fresh ones.
+- Interaction: decide what =g= does while a refresh runs, and whether
+  marks, sorting, and fetch may be used meanwhile.
+
+Likely of interest upstream, since anyone listing repositories over TRAMP
+pays this cost.  Design before code; start a topic only once these are
+settled.
 
 * Grouping upstream (open)
 

@@ -43,6 +43,8 @@ Current topics, in merge order:
 2. =repolist/group-headers=
 3. =repolist/marks=
 4. =repolist/async-fetch= (stacked on =repolist/group-headers=)
+5. =repolist/buffer-naming= (stacked on =repolist/local-variable-p=)
+6. =repolist/mark-group= (stacked on =repolist/marks=)
 
 ** One-time setup
 
@@ -97,7 +99,9 @@ to resolve.
   topics=(repolist/local-variable-p
           repolist/group-headers
           repolist/marks
-          repolist/async-fetch)
+          repolist/async-fetch
+          repolist/buffer-naming
+          repolist/mark-group)
   if ! git diff --quiet || ! git diff --cached --quiet; then
     echo "Uncommitted tracked changes; aborting." >&2
     exit 1
@@ -119,9 +123,14 @@ git fetch upstream
 git switch main && git merge --ff-only upstream/main && git push origin main
 git switch repolist/async-fetch
 git rebase --update-refs upstream/main   # moves the whole stack
+git switch repolist/buffer-naming
+git rebase --update-refs upstream/main   # and the second stack
+git switch repolist/mark-group
+git rebase --update-refs upstream/main   # and the third
 #+end_src
 
-Rebase independent topics one at a time, then rebuild =gjg=.
+Rebase independent topics one at a time, each stack from its top, then
+rebuild =gjg=.
 
 * Testing on perihelion
 
@@ -195,7 +204,10 @@ EXWM side is untested, so verify it on first use.
 3. Restart Emacs.  =M-: (locate-library "magit-repos")= should name the
    clone, and =M-x magit-version= should describe =gjg=, for example
    =v4.7.2-10-gd68433c1=.
-4. After each rebuild of =gjg= on perihelion, update and restart Emacs:
+4. After each rebuild of =gjg= on perihelion, update and restart Emacs.
+   Run this on the EXWM host only: there =origin= is perihelion, but on
+   perihelion it is GitHub, whose =gjg= may be stale (this reset
+   perihelion's =gjg= by mistake on 2026-11-22; recovered from the reflog).
    #+begin_src bash
    cd ~/projects/emacs/magit
    git fetch && git reset --hard origin/gjg && make lisp
