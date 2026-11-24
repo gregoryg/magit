@@ -177,13 +177,17 @@ Used by `magit-repolist--print-entry' to restore marks after the
 list is printed again.")
 
 (defun magit-repolist-mark ()
-  "Mark a repository and move to the next line."
+  "Mark a repository and move to the next line.
+On a group heading, mark all repositories in that group and move
+to the next heading."
   (interactive)
   (magit-repolist--ensure-padding)
   (magit-repolist--set-mark "*"))
 
 (defun magit-repolist-unmark ()
-  "Unmark a repository and move to the next line."
+  "Unmark a repository and move to the next line.
+On a group heading, unmark all repositories in that group and move
+to the next heading."
   (interactive)
   (magit-repolist--set-mark nil))
 
@@ -195,8 +199,19 @@ list is printed again.")
 
 (defun magit-repolist--set-mark (mark)
   "Set the mark of the repository at point to MARK and move to the next line.
-If MARK is nil, then remove the mark."
-  (when-let ((id (tabulated-list-get-id)))
+If there is no repository at point, then point is on a group heading
+\(see `tabulated-list-groups'); set the mark of every repository up to
+the next heading, and move there.  If MARK is nil, then remove marks."
+  (cond ((tabulated-list-get-id)
+         (magit-repolist--set-mark-1 mark))
+        ((zerop (forward-line))
+         (while (and (not (eobp))
+                     (tabulated-list-get-id))
+           (magit-repolist--set-mark-1 mark)))))
+
+(defun magit-repolist--set-mark-1 (mark)
+  "Set the mark of the repository at point to MARK and move to the next line."
+  (let ((id (tabulated-list-get-id)))
     (if mark
         (puthash id mark magit-repolist--marks)
       (remhash id magit-repolist--marks)))
@@ -242,11 +257,18 @@ repositories that were not fetched then remain marked."
   (magit-repolist--mapc (##find-file-other-frame file) repos))
 
 (defun magit-repolist--ensure-padding ()
-  "Set `tabulated-list-padding' to 2, unless that is already non-zero."
+  "Set `tabulated-list-padding' to 2, unless that is already non-zero.
+Printing the list again keeps point on the same entry, or on the
+same line if there is no entry at point, such as a group heading."
   (when (zerop tabulated-list-padding)
-    (setq tabulated-list-padding 2)
-    (tabulated-list-init-header)
-    (tabulated-list-print t)))
+    (let ((line (and (not (tabulated-list-get-id))
+                     (line-number-at-pos))))
+      (setq tabulated-list-padding 2)
+      (tabulated-list-init-header)
+      (tabulated-list-print t)
+      (when line
+        (goto-char (point-min))
+        (forward-line (1- line))))))
 
 (defun magit-repolist--get-repos (&optional char)
   "Return marked repositories or `all' if none are marked.

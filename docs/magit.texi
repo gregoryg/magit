@@ -3204,12 +3204,14 @@ This command shows the status for the repository at point.
 @item @kbd{m} (@code{magit-repolist-mark})
 @kindex m
 @findex magit-repolist-mark
-This command marks the repository at point.
+This command marks the repository at point.  On a group heading,
+it marks all repositories in that group.
 
 @item @kbd{u} (@code{magit-repolist-unmark})
 @kindex u
 @findex magit-repolist-unmark
-This command unmarks the repository at point.
+This command unmarks the repository at point.  On a group heading,
+it unmarks all repositories in that group.
 
 @item @kbd{U} (@code{magit-repolist-unmark-all})
 @kindex U

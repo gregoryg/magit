@@ -2767,11 +2767,13 @@ The following commands are available in repolist buffers:
 
 - Key: m (magit-repolist-mark) ::
 
-  This command marks the repository at point.
+  This command marks the repository at point.  On a group heading,
+  it marks all repositories in that group.
 
 - Key: u (magit-repolist-unmark) ::
 
-  This command unmarks the repository at point.
+  This command unmarks the repository at point.  On a group heading,
+  it unmarks all repositories in that group.
 
 - Key: U (magit-repolist-unmark-all) ::
 

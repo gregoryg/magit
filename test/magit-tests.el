@@ -553,6 +553,71 @@ Recent commits\n[[:xdigit:]]\\{7,\\} master dummy\\'"
     (revert-buffer)
     (should-not (magit-test-repolist-marked))))
 
+(defun magit-test-repolist-group ()
+  "Show \"a\" and \"b\" in group \"First group\", and \"c\" in \"Second group\"."
+  (setq tabulated-list-groups
+        (lambda ()
+          (let ((first (list "First group"))
+                (second (list "Second group")))
+            (dolist (entry tabulated-list-entries)
+              (push entry (cdr (if (equal (file-name-nondirectory
+                                           (directory-file-name (car entry)))
+                                          "c")
+                                   second
+                                 first))))
+            (list first second))))
+  (tabulated-list-print))
+
+(defun magit-test-repolist-goto-heading (heading)
+  "Move to the line showing HEADING."
+  (goto-char (point-min))
+  (re-search-forward (concat "^" (regexp-quote heading) "$"))
+  (goto-char (pos-bol)))
+
+(defun magit-test-repolist-line ()
+  "Return the text of the current line."
+  (buffer-substring-no-properties (pos-bol) (pos-eol)))
+
+(ert-deftest magit-repolist-mark:group ()
+  (skip-unless (boundp 'tabulated-list-groups))
+  (magit-test-with-repolist
+    (magit-test-repolist-group)
+    (magit-test-repolist-goto-heading "First group")
+    (magit-repolist-mark)
+    (should (equal (magit-test-repolist-marked) '("a" "b")))
+    (should (equal (magit-test-repolist-line) "Second group"))
+    (magit-repolist-mark)
+    (should (equal (magit-test-repolist-marked) '("a" "b" "c")))
+    (should (eobp))
+    (magit-test-repolist-goto-heading "First group")
+    (magit-repolist-unmark)
+    (should (equal (magit-test-repolist-marked) '("c")))
+    (should (equal (magit-test-repolist-line) "Second group"))
+    (magit-test-repolist-goto-heading "First group")
+    (should (equal (magit-test-repolist-line) "First group"))
+    (revert-buffer)
+    (should (equal (magit-test-repolist-marked) '("c")))))
+
+(ert-deftest magit-repolist-mark:group-padding ()
+  ;; The first mark prints the list again to make room for marks.
+  (skip-unless (boundp 'tabulated-list-groups))
+  (magit-test-with-repolist
+    (magit-test-repolist-group)
+    (should (zerop tabulated-list-padding))
+    (magit-test-repolist-goto-heading "Second group")
+    (magit-repolist-mark)
+    (should (equal (magit-test-repolist-marked) '("c")))))
+
+(ert-deftest magit-repolist-mark:group-entry ()
+  (skip-unless (boundp 'tabulated-list-groups))
+  (magit-test-with-repolist
+    (magit-test-repolist-group)
+    (magit-test-repolist-mark #'magit-repolist-mark "a")
+    (should (equal (magit-test-repolist-marked) '("a")))
+    (should (magit-test-repolist-name))
+    (magit-test-repolist-mark #'magit-repolist-unmark "a")
+    (should-not (magit-test-repolist-marked))))
+
 (ert-deftest magit-repolist-column-version:no-commits ()
   (magit-with-test-repository
     (should-not (magit-repolist-column-version nil))))
