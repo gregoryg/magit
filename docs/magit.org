@@ -2776,14 +2776,17 @@ The following commands are available in repolist buffers:
 - Key: f (magit-repolist-fetch) ::
 
   This command fetches all marked repositories.  If no repositories
-  are marked, then it offers to fetch all displayed repositories.
+  are marked, then it fetches the repository at point.  If there is
+  no repository at point either, then it offers to fetch all displayed
+  repositories.
 
 - Key: 5 (magit-repolist-find-file-other-frame) ::
 
   This command reads a relative file-name (without completion) and
   opens the respective file in each marked repository in a new frame.
-  If no repositories are marked, then it offers to do this for all
-  displayed repositories.
+  If no repositories are marked, then it does this for the repository
+  at point.  If there is no repository at point either, then it offers
+  to do this for all displayed repositories.
 
 ** Logging
 

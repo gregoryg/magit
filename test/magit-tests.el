@@ -513,6 +513,37 @@ Recent commits\n[[:xdigit:]]\\{7,\\} master dummy\\'"
         (should (equal (caar tabulated-list-entries) default-directory))
         (should (equal (aref (cadar tabulated-list-entries) 1) ""))))))
 
+(ert-deftest magit-repolist--get-repos:at-point ()
+  (magit-with-test-repository
+    (let ((magit-repository-directories (list (cons default-directory 0)))
+          (asked nil)
+          (answer nil))
+      (cl-letf (((symbol-function 'magit-confirm)
+                 (lambda (&rest _) (setq asked t) answer)))
+        (with-temp-buffer
+          (magit-repolist-mode)
+          (magit-repolist-setup-1)
+          (magit-repolist-refresh)
+          (let ((id (caar tabulated-list-entries)))
+            ;; Nothing marked: the repository at point, without asking.
+            (goto-char (point-min))
+            (should (equal (magit-repolist--get-repos ?*) (list id)))
+            (should-not asked)
+            ;; No repository at point: ask about all of them.
+            (goto-char (point-max))
+            (should-error (magit-repolist--get-repos ?*) :type 'user-error)
+            (should asked)
+            (setq asked nil answer t)
+            (should (eq (magit-repolist--get-repos ?*) 'all))
+            (should asked)
+            ;; Marked repositories take precedence over point.
+            (goto-char (point-min))
+            (magit-repolist-mark)
+            (setq asked nil)
+            (goto-char (point-max))
+            (should (equal (magit-repolist--get-repos ?*) (list id)))
+            (should-not asked)))))))
+
 ;;; Utils
 
 (ert-deftest magit-utils:add-face-text-property ()
