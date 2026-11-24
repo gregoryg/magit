@@ -738,6 +738,29 @@ only hangs."
               (should (equal (buffer-name buffer) "*Magit Repositories*"))
             (kill-buffer buffer)))))))
 
+(ert-deftest magit-repolist-setup:subdirectories ()
+  (magit-with-test-repository
+    (let ((dir default-directory))
+      (with-temp-file ".dir-locals.el"
+        (prin1 `((nil . ((magit-repository-directories . ((,dir . 0))))))
+               (current-buffer)))
+      (let ((buffers
+             (mapcar (lambda (sub)
+                       (make-directory sub)
+                       (with-temp-buffer
+                         (setq default-directory (expand-file-name sub dir))
+                         (hack-dir-local-variables-non-file-buffer)
+                         (magit-test-repolist-setup)))
+                     '("a/" "b/"))))
+        (unwind-protect
+            ;; The buffer is named after the list's directory, so
+            ;; invoking from either subdirectory shows the same buffer.
+            (progn
+              (should (eq (car buffers) (cadr buffers)))
+              (should (string-search (abbreviate-file-name dir)
+                                     (buffer-name (car buffers)))))
+          (mapc #'kill-buffer (delete-dups buffers)))))))
+
 ;;; Utils
 
 (ert-deftest magit-utils:add-face-text-property ()
