@@ -46,7 +46,7 @@ its test can sit beside that topic's tests and reuse its setup helper.
 invoking from two subdirectories opened two buffers showing the same list.
 Implemented 2026-11-22: the test fails before the fix, =make lisp= clean,
 =make test= 40/40, and a simulated =gjg= merge is conflict-free and passes
-48/48.  Awaiting one commit, then a =gjg= rebuild.
+48/48.
 - [X] Bind =default-directory= to the list directory when generating the name
 - [X] ERT: invoking from two subdirectories reuses one buffer
   (=magit-repolist-setup:subdirectories=)
@@ -80,8 +80,7 @@ Design in PLANNING, "Marks do not survive a redraw".  Implemented
 =make test= 40/40, and a simulated =gjg= merge with both earlier topics is
 conflict-free, passes all 10 repository-list tests, and keeps marks with
 groups.  =U= reprints the list instead of calling
-=tabulated-list-clear-all-tags=.  Awaiting two commits, then a =gjg=
-rebuild.
+=tabulated-list-clear-all-tags=.
 - [X] Check =tabulated-list-clear-all-tags= exists in Emacs 28.1 (since
   27.1; signals an error while the padding is 0)
 - [X] Store marks per repository and reapply them in a
@@ -98,7 +97,7 @@ Branch =repolist/async-fetch=, stacked on =repolist/group-headers=.  Design
 in PLANNING, "Fetch design".  Implemented 2026-11-22: =make lisp= clean,
 =make test= 41/41, and a simulated =gjg= merge with all three other topics
 is conflict-free in code, tests, and both manuals, and passes all 12
-repository-list tests.  Awaiting one commit, then a =gjg= rebuild.
+repository-list tests.
 In =gjg=, =magit-repolist-mark:fetch= from =repolist/marks= now passes only
 because fetching is asynchronous; when ordering topics for upstream, rework
 that test for the new meaning of marks after a fetch.
@@ -111,8 +110,7 @@ deadline.  Committed as a fixup and accepted on the EXWM host.  That check
 also showed every failure logging an empty =Git error= line, and
 =magit-process-raise-error= would stop the queue at the first failure;
 fixed by binding both off around =magit-process-finish=
-(=magit-repolist-fetch:quiet=).  Awaiting a fixup commit, then a =gjg=
-rebuild.
+(=magit-repolist-fetch:quiet=).
 - [X] Settle approach A or B, and answer the open design questions (B;
   Gregory, 2026-11-22)
 - [X] Verify the prompt-detection hook point: it needs its own process
@@ -172,8 +170,7 @@ to make room for marks, which moved point from a heading to the top, so
 at point.  The two group tests fail before the change; =make lisp= clean,
 =make test= 43/43; a simulated =gjg= merge is conflict-free and passes
 51/51.  A batch probe with the config's property headings marks a folded
-group, keeps it folded, and keeps the heading's face.  Awaiting one
-commit, then a =gjg= rebuild.
+group, keeps it folded, and keeps the heading's face.
 - [X] =m= and =u= on a line without a repository act on its group, then
   move to the next heading
 - [X] ERT, Emacs 30+: =m= on a heading marks exactly its group and leaves
