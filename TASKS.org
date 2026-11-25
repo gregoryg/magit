@@ -246,7 +246,7 @@ hunk.
   the hub")
 - [ ] Manual, EXWM host: first =m= of a session at the end of the list
 
-* STARTED Fix =magit-toplevel= for linked worktrees over TRAMP [2/6]
+* DONE Fix =magit-toplevel= for linked worktrees over TRAMP [5/5]
 Branch =fix/toplevel-tramp-worktree= from =upstream/main=.  Upstream
 regression from =05af32fc= (2026-06-03, "magit-toplevel: Fix committing in
 relative worktrees"): while committing, =default-directory= is the
@@ -269,12 +269,12 @@ of 20.
 - [X] Commit the fix: =lisp/magit-git.el= (=dac3b92a=)
 - [X] Commit the test: =test/magit-tests.el= (=4ffd9bdf=)
   (=magit-toplevel:remote-linked-worktree-gitdir=)
-- [ ] On =repolist/marks=: rework =magit-repolist-mark:fetch= to run Git
-  without =magit-repolist-fetch=
-- [ ] Run the update script; =make test= on perihelion several times
-- [ ] Manual, EXWM host: commit in =.notes/= from Magit over TRAMP
-- [ ] Propose upstream in 2027: a regression with a fix of a few lines
-  and a test; the best first contribution
+- [X] On =repolist/marks=: rework =magit-repolist-mark:fetch= to run Git
+  without =magit-repolist-fetch= (=35d63aaf=)
+- [X] Run the update script; =make test= on perihelion several times
+  (=gjg= =026db96e=; 53/53 on every run, Gregory, 2026-11-24)
+- [X] Manual, EXWM host: commit in =.notes/= from Magit over TRAMP
+  (Gregory, 2026-11-24)
 
 * TODO Investigate a rare =magit-repolist-fetch:async= failure [0/1]
 Seen once in 46 full-suite runs on 2026-11-24, in =gjg= merged with
@@ -284,19 +284,23 @@ runs of unmodified =gjg= or 25 runs of the fetch tests alone.  The log was
 saved to the session scratchpad, which may not survive a reboot.
 - [ ] Reproduce with repeated runs, then find what ends the queue early
 
-* TODO Make GitHub the hub [0/4]
+* DONE Make GitHub the hub [4/4]
 Decided 2026-11-24; design in PLANNING, "GitHub as the hub".  The
 developer guide already describes the new workflow.  Gregory pushed =gjg=
 (=68cfc3a7=) and all seven topics to GitHub the same day, so the first run
-of the update script should merge nothing new.
-- [ ] Replace the saved rebuild script with the update script from the
+of the update script should merge nothing new.  Its first real run, after
+two topic changes, merged =repolist/marks= and
+=fix/toplevel-tramp-worktree= on top of =68cfc3a7= and pushed =gjg=
+=026db96e= without force; GitHub matched perihelion afterwards.
+- [X] Replace the saved rebuild script with the update script from the
   developer guide
-- [ ] Run it on perihelion: no new merges, and the push reports every
-  branch up to date except =notes=
-- [ ] Switch the EXWM host's clone to GitHub (developer guide, "Switch an
+- [X] Run it on perihelion: only the changed topics are merged, and the
+  push needs no force
+- [X] Switch the EXWM host's clone to GitHub (developer guide, "Switch an
   existing clone to GitHub"); =git status= reports =gjg= up to date
-- [ ] After the next topic change: the script pushes without force, and
-  =F u= on the EXWM host fast-forwards
+  (Gregory, 2026-11-24)
+- [X] After the next topic change: the script pushes without force, and
+  =F u= on the EXWM host fast-forwards (Gregory, 2026-11-24)
 
 * DEFERRED Make list refresh asynchronous
 Every column runs git per repository on each refresh; TRAMP makes this slow.
@@ -308,5 +312,8 @@ Needs a fallback for Emacs before 30.  Start as a GitHub Discussion.
 
 * DEFERRED Engage upstream in 2027
 Open Discussions for async fetch and grouping, file bug issues once trackers
-reopen, and rewrite code personally for any pull request.  Procedure: the
+reopen, and rewrite code personally for any pull request.  The best first
+contribution is =fix/toplevel-tramp-worktree=: a regression from
+=05af32fc=, a fix of a few lines, and a test.  The first-mark point bug and
+the undocumented confirmation keys are small fixes too.  Procedure: the
 developer guide, "Proposing a topic upstream".
