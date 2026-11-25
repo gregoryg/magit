@@ -1074,7 +1074,10 @@ tree, then it is not possible to avoid returning the truename."
             ;; This has long been fixed, but old repository may still
             ;; exist that contain such a file.  See #2364.
             [_(not (equal wtree ".git"))]
-            (file-name-directory (expand-file-name wtree default-directory)))
+            (file-name-directory
+             (if (file-name-absolute-p wtree)
+                 (concat (file-remote-p default-directory) wtree)
+               (expand-file-name wtree default-directory))))
            ;; Keep the bare repo check after the linked working tree
            ;; check.  See #5636.
            ((magit-bare-repo-p) gitdir)

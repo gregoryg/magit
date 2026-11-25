@@ -943,6 +943,35 @@ only hangs."
                        (magit--filter-envvars-like-tramp))))
                  '("EXPORT=value"))))
 
+(defun magit-test-add-mock-tramp-method ()
+  "Add the \"mock\" Tramp method, which runs a local shell as a remote one."
+  (unless (assoc "mock" tramp-methods)
+    (add-to-list 'tramp-methods
+                 '("mock"
+                   (tramp-login-program "sh")
+                   (tramp-login-args (("-i")))
+                   (tramp-remote-shell "/bin/sh")
+                   (tramp-remote-shell-args ("-c"))
+                   (tramp-connection-timeout 10)))))
+
+(ert-deftest magit-toplevel:remote-linked-worktree-gitdir ()
+  ;; While committing, `default-directory' is the gitdir of the linked
+  ;; worktree, whose "gitdir" file names the worktree with a local path.
+  (skip-unless (executable-find "sh"))
+  (magit-test-add-mock-tramp-method)
+  (magit-with-test-repository
+    (magit-git "commit" "--allow-empty" "-m" "dummy")
+    (magit-git "worktree" "add" "wt")
+    (let ((worktree (file-name-as-directory (expand-file-name "wt")))
+          (default-directory (concat "/mock::" (expand-file-name
+                                                ".git/worktrees/wt/"))))
+      (unwind-protect
+          (let ((toplevel (magit-toplevel)))
+            (should (file-name-absolute-p (magit-file-line "gitdir")))
+            (should (file-remote-p toplevel))
+            (should (equal (file-local-name toplevel) worktree)))
+        (tramp-cleanup-all-connections)))))
+
 ;;; _
 (provide 'magit-tests)
 ;; Local Variables:
