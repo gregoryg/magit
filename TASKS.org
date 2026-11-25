@@ -246,6 +246,44 @@ hunk.
   the hub")
 - [ ] Manual, EXWM host: first =m= of a session at the end of the list
 
+* STARTED Fix =magit-toplevel= for linked worktrees over TRAMP [2/6]
+Branch =fix/toplevel-tramp-worktree= from =upstream/main=.  Upstream
+regression from =05af32fc= (2026-06-03, "magit-toplevel: Fix committing in
+relative worktrees"): while committing, =default-directory= is the
+worktree's gitdir, and the absolute path read from its =gitdir= file lost
+the TRAMP prefix, so committing in =.notes/= over TRAMP from the EXWM host
+failed with "Setting current directory" on a local path.  Reproduced in
+batch with Tramp's =mock= method; Gregory confirmed the fix by evaluating it
+on the EXWM host (2026-11-24).  The new test fails before the fix,
+=make lisp= clean, =make test= 38/38.
+
+Merged into =gjg=, the new test exposed a stray process: in =gjg=,
+=magit-repolist-mark:fetch= (from =repolist/marks=) starts an asynchronous
+fetch and never waits, and its sentinel later fails in the deleted test
+directory once any later test runs the event loop, as Tramp does.  The same
+test also fails on its own about one run in 15, when the fetch finishes
+first and clears the mark.  Reworked below to run Git through
+=magit-repolist--mapc=, as synchronous fetching did: it passes with the
+marks code, fails with upstream's, and the merged suite then passed 20 runs
+of 20.
+- [X] Commit the fix: =lisp/magit-git.el= (=dac3b92a=)
+- [X] Commit the test: =test/magit-tests.el= (=4ffd9bdf=)
+  (=magit-toplevel:remote-linked-worktree-gitdir=)
+- [ ] On =repolist/marks=: rework =magit-repolist-mark:fetch= to run Git
+  without =magit-repolist-fetch=
+- [ ] Run the update script; =make test= on perihelion several times
+- [ ] Manual, EXWM host: commit in =.notes/= from Magit over TRAMP
+- [ ] Propose upstream in 2027: a regression with a fix of a few lines
+  and a test; the best first contribution
+
+* TODO Investigate a rare =magit-repolist-fetch:async= failure [0/1]
+Seen once in 46 full-suite runs on 2026-11-24, in =gjg= merged with
+=fix/toplevel-tramp-worktree=: the queue stopped after 3 of 4 repositories
+and marked nothing, so the test's final assertion failed.  Not seen in 15
+runs of unmodified =gjg= or 25 runs of the fetch tests alone.  The log was
+saved to the session scratchpad, which may not survive a reboot.
+- [ ] Reproduce with repeated runs, then find what ends the queue early
+
 * TODO Make GitHub the hub [0/4]
 Decided 2026-11-24; design in PLANNING, "GitHub as the hub".  The
 developer guide already describes the new workflow.  Gregory pushed =gjg=

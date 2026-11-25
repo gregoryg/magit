@@ -51,6 +51,7 @@ Current topics, in merge order:
 5. =repolist/buffer-naming= (stacked on =repolist/local-variable-p=)
 6. =repolist/mark-group= (stacked on =repolist/marks=)
 7. =repolist/act-at-point=
+8. =fix/toplevel-tramp-worktree= (not a repository-list change)
 
 ** One-time setup
 
@@ -116,7 +117,8 @@ be a fast-forward, which means a branch was rewritten.
           repolist/async-fetch
           repolist/buffer-naming
           repolist/mark-group
-          repolist/act-at-point)
+          repolist/act-at-point
+          fix/toplevel-tramp-worktree)
   if ! git diff --quiet || ! git diff --cached --quiet; then
     echo "Uncommitted tracked changes; aborting." >&2
     exit 1
@@ -137,7 +139,6 @@ be a fast-forward, which means a branch was rewritten.
   git push origin main gjg notes "${topics[@]}"
   echo "Pushed.  Update each clone (see 'Running the fork')."
 #+end_src
-
 ** Follow upstream
 
 The update script merges =upstream/main= into =gjg=; nothing else is
