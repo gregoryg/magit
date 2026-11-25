@@ -26,7 +26,8 @@ echo '.notes/' >> .git/info/exclude
 
 A clone of this repository receives the branch as =origin/notes=.  To read
 the notes there, run =git worktree add .notes notes= and exclude =.notes/=.
-=notes= can stay off GitHub; pushing it to the fork publishes it.
+The update script pushes =notes= to the fork with the other branches, so
+these notes are public.
 
 * Branches
 
@@ -34,8 +35,12 @@ the notes there, run =git worktree add .notes notes= and exclude =.notes/=.
 |-------------------+------------------------------------+------------------------------------|
 | =main=            | =upstream/main=                    | Mirror; fast-forward only          |
 | =repolist/<slug>= | =upstream/main=                    | One logical fix, upstream-shaped   |
-| =gjg=             | =upstream/main=, rebuilt by script | All topics merged; what Emacs runs |
+| =gjg=             | =upstream/main=, merged forward    | All topics merged; what Emacs runs |
 | =pr/<slug>=       | topic's base, then =upstream/main= | Hand rewrite for a pull request    |
+
+GitHub (=origin=, =gregoryg/magit=) is the hub: every clone fetches from it,
+and only perihelion pushes to it.  No branch on it is ever rewritten, so
+every clone only fast-forwards, and no clone ever needs =reset --hard=.
 
 Current topics, in merge order:
 
@@ -87,11 +92,19 @@ trailing period, body wrapped near 70 columns explaining why.  See
   rewrite those before proposing them upstream (see "Proposing a topic
   upstream").
 
-** Rebuild the integration branch
+** Update the integration branch
 
-Run after any topic changes.  It refuses to run with uncommitted tracked
-changes and stops at the first conflict, which =rerere= may already know how
-to resolve.
+Run on perihelion after any topic changes, and to follow upstream.  It
+moves =gjg= forward and never rewrites it: it merges new upstream commits
+and any topic commits that =gjg= lacks, then pushes everything to GitHub.
+A topic already merged and unchanged is a no-op, so the script is safe to
+run at any time.
+
+It refuses to run with uncommitted tracked changes.  It stops at the first
+conflict, which =rerere= may already know how to resolve; resolve it,
+commit the merge, and run the script again to continue.  It also stops if
+GitHub's =gjg= has commits that the local one lacks, or if a push would not
+be a fast-forward, which means a branch was rewritten.
 
 #+begin_src bash :results verbatim
   #!/usr/bin/env bash
@@ -109,30 +122,36 @@ to resolve.
     exit 1
   fi
   git fetch upstream
-  git switch -C gjg upstream/main
+  git fetch origin
+  git switch main
+  git merge --ff-only upstream/main
+  git switch gjg
+  git merge --ff-only origin/gjg
+  git merge --no-edit upstream/main
   for t in "${topics[@]}"; do
     git rev-parse --verify --quiet "refs/heads/$t" >/dev/null ||
       { echo "skip $t (no such branch)"; continue; }
     git merge --no-ff --no-edit "$t"
   done
-  git log --oneline --graph upstream/main..gjg
-  echo "Review, then update the EXWM host (see 'Running the fork')."
+  git log --oneline --first-parent -10 gjg
+  git push origin main gjg notes "${topics[@]}"
+  echo "Pushed.  Update each clone (see 'Running the fork')."
 #+end_src
+
 ** Follow upstream
 
-#+begin_src bash
-git fetch upstream
-git switch main && git merge --ff-only upstream/main && git push origin main
-git switch repolist/async-fetch
-git rebase --update-refs upstream/main   # moves the whole stack
-git switch repolist/buffer-naming
-git rebase --update-refs upstream/main   # and the second stack
-git switch repolist/mark-group
-git rebase --update-refs upstream/main   # and the third
-#+end_src
+The update script merges =upstream/main= into =gjg=; nothing else is
+needed.  Topics stay on the base they started from and are not rebased:
+they are published, and a pull request is a hand rewrite on a =pr/<slug>=
+branch from current upstream anyway (see "Proposing a topic upstream").
 
-Rebase independent topics one at a time, each stack from its top, then
-rebuild =gjg=.
+To bring a change from a lower topic into a topic stacked on it, merge
+the lower topic into the stacked one instead of rebasing:
+
+#+begin_src bash
+git switch repolist/async-fetch
+git merge repolist/group-headers
+#+end_src
 
 * Testing on perihelion
 
@@ -175,17 +194,18 @@ different sources; =make clean= does this.
 
 * Running the fork on the EXWM host
 
-The EXWM host clones this repository straight from perihelion over SSH,
-using the same SSH setup as TRAMP; no hosting service is involved.  The clone
-is only for running the fork: never edit or commit there.
+The EXWM host clones =gjg= from GitHub.  The clone is only for running the
+fork: never edit or commit there.  Until 2026-11-24 it cloned from
+perihelion instead; "Switch an existing clone to GitHub" below moves such a
+clone over.
 
-Cloning =gjg= was tested 2026-11-21 with a local clone on perihelion; the
-EXWM side is untested, so verify it on first use.
-
-1. Clone the integration branch and build it with the host's own Emacs:
+1. Clone the integration branch, refuse merges on pull, and build it with
+   the host's own Emacs:
    #+begin_src bash
-   git clone -b gjg perihelion:projects/emacs/magit ~/projects/emacs/magit
-   cd ~/projects/emacs/magit && make lisp
+   git clone -b gjg git@github.com:gregoryg/magit.git ~/projects/emacs/magit
+   cd ~/projects/emacs/magit
+   git config pull.ff only
+   make lisp
    #+end_src
    Do not copy =.elc= files from perihelion: Emacs 32 compiled them.
    =make= finds =cond-let=, =llama=, =transient=, and =with-editor= in
@@ -206,19 +226,33 @@ EXWM side is untested, so verify it on first use.
 3. Restart Emacs.  =M-: (locate-library "magit-repos")= should name the
    clone, and =M-x magit-version= should describe =gjg=, for example
    =v4.7.2-10-gd68433c1=.
-4. After each rebuild of =gjg= on perihelion, update and restart Emacs.
-   Run this on the EXWM host only: there =origin= is perihelion, but on
-   perihelion it is GitHub, whose =gjg= may be stale (this reset
-   perihelion's =gjg= by mistake on 2026-11-22; recovered from the reflog).
+4. After each run of the update script on perihelion, pull, rebuild, and
+   restart Emacs.  In Magit, =F u= pulls; then run =make lisp=.
    #+begin_src bash
    cd ~/projects/emacs/magit
-   git fetch && git reset --hard origin/gjg && make lisp
+   git pull && make lisp
    #+end_src
-   Each rebuild replaces =gjg= with new commits, so =git pull= would try to
-   merge the old and new versions; =reset --hard= simply takes the new one.
+   With =pull.ff only=, a pull either fast-forwards or refuses.  A refusal
+   means a branch was rewritten somewhere: find out why before doing
+   anything else, and never answer it with =reset --hard=.
 
-Pushing =gjg= to =origin= or to the self-hosted Gitea is optional: it gives
-a second source when perihelion is down, and GitHub can test it.
+** Switch an existing clone to GitHub
+
+For a clone made from perihelion.  Point =origin= at GitHub, drop the
+remote-tracking branches that only perihelion had, and refuse merges on
+pull:
+
+#+begin_src bash
+cd ~/projects/emacs/magit
+git remote set-url origin git@github.com:gregoryg/magit.git
+git fetch --prune origin
+git config pull.ff only
+git status
+#+end_src
+
+=git status= should report =gjg= up to date with =origin/gjg=.  If it is
+behind, =git pull= fast-forwards it.  If the two have diverged, stop and
+compare them first.
 
 ** Quick trial without rebuilding
 

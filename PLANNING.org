@@ -9,11 +9,14 @@ keep each fix in a shape that could go upstream.  Since 2026-11-21 the EXWM
 host runs the =gjg= integration branch instead of MELPA Magit, and the
 workarounds in =~/emacs-gregoryg/README.org= (section "Magit") are gone.
 
-As of 2026-11-24, five topics are committed, merged into =gjg=, and accepted
-on the EXWM host: =repolist/local-variable-p=, =repolist/group-headers=,
-=repolist/marks=, =repolist/async-fetch=, and =repolist/buffer-naming=.
-Fetching no longer blocks Emacs, stops at credential prompts, and marks the
-repositories that failed.  Asynchronous refresh is the largest remaining
+As of 2026-11-24, seven topics are committed, merged into =gjg=, and
+accepted on the EXWM host: =repolist/local-variable-p=,
+=repolist/group-headers=, =repolist/marks=, =repolist/async-fetch=,
+=repolist/buffer-naming=, =repolist/mark-group=, and
+=repolist/act-at-point=.  Fetching no longer blocks Emacs, stops at
+credential prompts, and marks the repositories that failed; commands act on
+the repository at point when nothing is marked, and =m= on a group heading
+marks the group.  Asynchronous refresh is the largest remaining
 daily cost; see "Asynchronous refresh (open)".
 
 Executable status lives in [[file:TASKS.org][TASKS.org]].  Setup and branch
@@ -37,13 +40,14 @@ stays in Gregory's config.
 - *perihelion* :: Development host for this clone and for agent sessions.
   Emacs 32.0.50, git 2.47.3.  Also a TRAMP target in Gregory's repository
   list (=/ssh:perihelion:...=).
-- *EXWM host* :: Gregory's daily Emacs.  Loads =gjg= from a clone whose
-  =origin= is perihelion; acceptance testing happens here, because the hang
-  and the UI problems only show there.
-- *Remotes* :: On perihelion, =origin= is the fork =gregoryg/magit= and
-  =upstream= is =magit/magit=.  The same name means different hosts on the
-  two machines, so the EXWM host's update command must not be run on
-  perihelion: on 2026-11-22 it reset =gjg= to a stale copy on GitHub.
+- *EXWM host* :: Gregory's daily Emacs.  Loads =gjg= from a clone of
+  GitHub; acceptance testing happens here, because the hang and the UI
+  problems only show there.
+- *Remotes* :: On every clone, =origin= is the fork =gregoryg/magit=, the
+  hub; perihelion also has =upstream=, =magit/magit=.  See "GitHub as the
+  hub".  Until 2026-11-24 the EXWM host's =origin= was perihelion, so the
+  same name meant different hosts, and on 2026-11-22 the EXWM host's update
+  command, run on perihelion, reset =gjg= to a stale copy on GitHub.
 
 * 2026-11-21 — Upstream-shaped topics, private use first
 
@@ -66,13 +70,11 @@ and the shape keeps an upstream path open without blocking daily use on it.
 
 - =main= mirrors =upstream/main= and only fast-forwards.
 - Topic branches are named =repolist/<slug>= and start from =upstream/main=.
-  A topic that depends on another is stacked on it and moved with
-  =git rebase --update-refs=.
-- =gjg= is the integration branch.  It is rebuilt from =upstream/main= by
-  merging the topics in a fixed order and never edited directly.  It is the
-  only branch the EXWM host runs, from a clone that fetches straight from
-  perihelion over SSH.  Pushing it to =origin= is optional: a backup, and a
-  way to run GitHub Actions.
+  A topic that depends on another is stacked on it.
+- =gjg= is the integration branch: the topics merged in a fixed order, and
+  never edited directly.  It is the only branch the EXWM host runs.
+  Superseded in part on 2026-11-24 by "GitHub as the hub": =gjg= is no
+  longer rebuilt, and stacks are no longer rebased.
 - =git rerere= records conflict resolutions, because every topic touches
   =lisp/magit-repos.el=.
 - Topics share the main worktree.  Revisit if they need to be checked out
@@ -83,6 +85,30 @@ and the shape keeps an upstream path open without blocking daily use on it.
   progress was hard to follow in untracked files.
 
 Upstream is quiet until early 2027, so rebasing onto it should be rare.
+
+* 2026-11-24 — GitHub as the hub
+
+GitHub (=gregoryg/magit=) is the one canonical copy, and each clone is a
+spoke that fetches from it; perihelion, where the work happens, is the only
+spoke that pushes.  No published branch is ever rewritten, so every clone
+only fast-forwards and none ever needs =reset --hard=.  A self-hosted Gitea
+could serve as the hub instead; nothing else would change.
+
+- =gjg= moves forward only.  The update script merges new =upstream/main=
+  commits and any topic commits it lacks, and pushes; it no longer rebuilds
+  =gjg= from =upstream/main=.  =rerere= still replays conflict resolutions.
+- Topics are published and not rebased.  A stacked topic takes a change
+  from the topic below by merging it.  Rebasing was only ever for upstream,
+  and a pull request is a hand rewrite on a =pr/<slug>= branch from current
+  upstream, so nothing is lost.
+- Clones set =pull.ff only=, so a rewritten branch shows up as a refused
+  pull rather than as an unexpected merge.
+
+Why: Gregory prefers a hub with spokes and no hard resets.  The rebuild
+model needed =reset --hard= on the EXWM host after every rebuild, and that
+command reset the wrong host once (2026-11-22).  The cost is a busier
+=gjg= history, with one merge per upstream update and per topic change;
+=git log --first-parent gjg= reads it as a list.
 
 * Problem analysis (2026-11-21)
 

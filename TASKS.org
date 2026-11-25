@@ -241,9 +241,24 @@ hunk.
   point
 - [ ] ERT without groups: the first =m= on the last line marks nothing
   (fails before the fix)
-- [ ] Rebase =repolist/mark-group= onto it, or drop the duplicate hunk when
-  the fix lands upstream
+- [ ] Use the same hunk as =repolist/mark-group=, so the two merge into
+  =gjg= without conflict (topics are not rebased; see PLANNING, "GitHub as
+  the hub")
 - [ ] Manual, EXWM host: first =m= of a session at the end of the list
+
+* TODO Make GitHub the hub [0/4]
+Decided 2026-11-24; design in PLANNING, "GitHub as the hub".  The
+developer guide already describes the new workflow.  Gregory pushed =gjg=
+(=68cfc3a7=) and all seven topics to GitHub the same day, so the first run
+of the update script should merge nothing new.
+- [ ] Replace the saved rebuild script with the update script from the
+  developer guide
+- [ ] Run it on perihelion: no new merges, and the push reports every
+  branch up to date except =notes=
+- [ ] Switch the EXWM host's clone to GitHub (developer guide, "Switch an
+  existing clone to GitHub"); =git status= reports =gjg= up to date
+- [ ] After the next topic change: the script pushes without force, and
+  =F u= on the EXWM host fast-forwards
 
 * DEFERRED Make list refresh asynchronous
 Every column runs git per repository on each refresh; TRAMP makes this slow.
