@@ -535,9 +535,13 @@ Recent commits\n[[:xdigit:]]\\{7,\\} master dummy\\'"
     (should (equal (magit-test-repolist-marked) '("a" "c")))))
 
 (ert-deftest magit-repolist-mark:fetch ()
+  ;; Running Git in a repository refreshes the list, as fetching
+  ;; synchronously did.  Do that directly, so that this test neither
+  ;; depends on how `magit-repolist-fetch' works nor leaves a process.
   (magit-test-with-repolist
     (magit-test-repolist-mark #'magit-repolist-mark "b")
-    (magit-repolist-fetch (magit-repolist--get-repos ?*))
+    (magit-repolist--mapc (##magit-run-git "remote" "update")
+                          (magit-repolist--get-repos ?*))
     (should (equal (magit-test-repolist-marked) '("b")))))
 
 (ert-deftest magit-repolist-unmark-all ()
